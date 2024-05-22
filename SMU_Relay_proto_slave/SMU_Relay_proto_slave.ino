@@ -5,9 +5,9 @@
 #include <SercomSPISlave.h>
 #include <DTIOI2CtoParallelConverter.h>
 
-//#define DEBUG // uncomment this line to print debug data to the serial bus
-#define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
-//#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
+#define DEBUG // uncomment this line to print debug data to the serial bus
+//#define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
+#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
 
 const char * app_ver = "v1.0";
 

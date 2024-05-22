@@ -9,7 +9,7 @@
 
 const char * app_ver = "v1.0";
 
-const byte CARD1_SPI_CS_PIN = 7;
+const byte CARD1_SPI_CS_PIN = 0;
 
 SPISettings settings = SPISettings(SPI_TRANSFER_CLOCK_FREQ, MSBFIRST, SPI_MODE0);
 
@@ -35,7 +35,7 @@ void loop() {
         digitalWrite(CARD1_SPI_CS_PIN, LOW);
 
         SPI.transfer(Serial.read());
-        delayMicroseconds(2); // play with this parameter
+        delayMicroseconds(1000); // play with this parameter
 
         digitalWrite(CARD1_SPI_CS_PIN, HIGH);
         SPI.endTransaction();

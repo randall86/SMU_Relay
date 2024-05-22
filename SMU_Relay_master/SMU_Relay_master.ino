@@ -7,6 +7,8 @@
 #include <PCA9540BD.h>
 #include <DTIOI2CtoParallelConverter.h>
 
+//#define DEBUG // uncomment this line to print debug data to the serial bus
+
 #define SPI_TRANSFER_CLOCK_FREQ_12 12000000
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_12
 
@@ -14,11 +16,11 @@ const char * app_ver = "v1.0";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
-const char * SLOT_STR = "SLOT";
-const char * END_STR = "END";
-const char * RELAY_STR = "RELAY";
-const char * ON_STR = "ON";
-const char * OFF_STR = "OFF";
+const char SLOT_CHAR = 'S';
+const char END_CHAR = 'E';
+const char RELAY_CHAR = 'R';
+const char ON_CHAR = '1';
+const char OFF_CHAR = '0';
 const char DELIM = ',';
 
 const byte FAULT_LED_PIN = 15; //Red
@@ -102,6 +104,8 @@ void setup() {
     Serial.print("SMU Relay (Master)");
     Serial.println(app_ver);
 
+    Wire.begin(); //need to start the Wire for I2C devices to function
+
     SPI.begin();
     pinMode(SPI_CS1_PIN, OUTPUT);
     pinMode(SPI_CS2_PIN, OUTPUT);
@@ -137,6 +141,13 @@ void loop() {
         //sanitize and remove unwanted characters (ctrl/special char and SPACE)
         if (('!' <= tmp_char) && (tmp_char <= '~'))
         {
+            if (tmp_char == SLOT_CHAR)
+            {
+                //when detected start, reset index and clear buffer
+                cmd_idx = 0;
+                resetBuffer();
+            }
+
             cmd_str[cmd_idx] = tmp_char;
 
             if (cmd_str[cmd_idx] == DELIM)
@@ -172,42 +183,43 @@ void loop() {
                     fifth_delim_found = true;
                 }
             }
-            
-            //5th delimiter found and at least 3 bytes arrived after 3nd delimiter
-            if ( (fifth_delim_found) && (cmd_idx >= delim5_idx + 3) )
+
+            //5th delimiter found and at least 1 byte arrived after 5th delimiter
+            if ( (fifth_delim_found) && (cmd_idx >= delim5_idx + 1) )
             {
                 //check for END
-                if (strncmp(&cmd_str[delim5_idx+1], END_STR, 3) == 0)
+                if (cmd_str[delim5_idx+1] == END_CHAR)
                 {
-                    //parse first 4 bytes of data for request type
-                    if (strncmp(&cmd_str[0], SLOT_STR, 4) == 0)
+                    //parse first data for request type
+                    if (cmd_str[0] == SLOT_CHAR)
                     {
                         //check for SLOT number
                         int SLOT_num = atoi(&cmd_str[delim1_idx+1]);
-                        
+
                         if ( (SLOT_num >= 1) && (SLOT_num <= 8) ) //SLOT 1-8 are external relays
                         {
                             SPI.beginTransaction(settings);
                             digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
 
                             //start sending to SPI lines begining of RELAY request type
-                            for(int i = delim2_idx+1; i < cmd_idx; i++)
+                            for(int i = delim2_idx+1; i <= cmd_idx; i++)
                             {
-                                delayMicroseconds(2); // play with this parameter
+                            #ifdef DEBUG
+                                Serial.println(cmd_str[i]); // Print latest data sent to SPI slave
+                            #endif
                                 SPI.transfer(cmd_str[i]);
+                                delayMicroseconds(1000); // play with this parameter
                             }
-                            
-                            delayMicroseconds(2); // play with this parameter
 
                             digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
                             SPI.endTransaction();
-                            
+
                             Serial.print(ACK_STR);
                         }
                         else if (SLOT_num == 0) //SLOT 0 is for local relay
                         {
-                            //parse next 5 bytes of data for RELAY request type
-                            if (strncmp(&cmd_str[delim2_idx+1], RELAY_STR, 5) == 0)
+                            //parse next data for RELAY request type
+                            if (cmd_str[delim2_idx+1] == RELAY_CHAR)
                             {
                                 //check for RELAY number
                                 int RELAY_num = atoi(&cmd_str[delim3_idx+1]);
@@ -215,16 +227,16 @@ void loop() {
                                 if ( (RELAY_num >= 1) && (RELAY_num <= 16) ) // only supports RELAY 1-16
                                 {
                                     //check for ON/OFF
-                                    if (strncmp(&cmd_str[delim4_idx+1], ON_STR, 2) == 0)
+                                    if (cmd_str[delim4_idx+1] == ON_CHAR)
                                     {
                                         relayWriteWrapper(RELAY_num-1, true);
-                                        //Serial.println("Received RELAY ON command");
+                                        //Serial.println("Received RELAY:ON command");
                                         Serial.print(ACK_STR);
                                     }
-                                    else if (strncmp(&cmd_str[delim4_idx+1], OFF_STR, 3) == 0)
+                                    else if (cmd_str[delim4_idx+1] == OFF_CHAR)
                                     {
                                         relayWriteWrapper(RELAY_num-1, false);
-                                        //Serial.println("Received RELAY OFF command");
+                                        //Serial.println("Received RELAY:OFF command");
                                         Serial.print(ACK_STR);
                                     }
                                     else
@@ -247,7 +259,7 @@ void loop() {
                         }
                         else
                         {
-                            //erial.println("ERROR: unknown SLOT");
+                            //Serial.println("ERROR: unknown SLOT");
                             Serial.print(NACK_STR);
                         }
                     }
@@ -257,6 +269,7 @@ void loop() {
                         Serial.print(NACK_STR);
                     }
                     
+                    //reset index and clear buffer when done processing
                     resetBuffer();
                     cmd_idx = -1;
                 }
