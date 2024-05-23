@@ -7,6 +7,8 @@
 #include <SercomSPISlave.h>
 #include <DTIOI2CtoParallelConverter.h>
 
+#define NOP __asm__("nop\n\t") //"nop" executes in one machine cycle (at 16 MHz) yielding a 62.5 ns delay
+
 #define DEBUG // uncomment this line to print debug data to the serial bus
 #define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
 //#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
@@ -256,8 +258,6 @@ void setup() {
 
     pinMode(IOEXP0_RESET_PIN, OUTPUT);
     pinMode(IOEXP1_RESET_PIN, OUTPUT);
-
-#if 0 // Commented out controlling the mux and io expander to prevent board going into bad state
     resetIOExpanders();
 
     multiplexer_U1.selectChannel(0); // for selecting ioExp0 channel
@@ -301,7 +301,6 @@ void setup() {
     ioExp1_U6.portMode1(ALLOUTPUT);
     ioExp1_U6.digitalWritePort0(0);
     ioExp1_U6.digitalWritePort1(0);
-#endif
 }
 
 void loop() {

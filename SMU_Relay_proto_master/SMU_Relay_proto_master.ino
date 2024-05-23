@@ -9,7 +9,7 @@
 
 const char * app_ver = "v1.0";
 
-const byte CARD1_SPI_CS_PIN = 0;
+const byte CARD1_SPI_CS_PIN = 0; //Update this accordingly for the CS pin
 
 SPISettings settings = SPISettings(SPI_TRANSFER_CLOCK_FREQ, MSBFIRST, SPI_MODE0);
 
