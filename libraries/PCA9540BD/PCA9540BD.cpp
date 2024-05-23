@@ -24,7 +24,7 @@
 
 PCA9540BD::PCA9540BD()
 {
-	Wire.begin();
+	//Wire.begin(); // Already done in setup()
 }
 
 void PCA9540BD::selectChannel(bool channelId)
