@@ -13,7 +13,7 @@
 #define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
 //#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
 
-const char * app_ver = "v1.0";
+const char * app_ver = "v2.0";
 
 const char END_CHAR = 'E';
 const char RELAY_CHAR = 'R';
@@ -306,20 +306,29 @@ void setup() {
 void loop() {
     // put your main code here, to run repeatedly:
     //get request from Master
-    //format: RELAY,<1-128>,<ON/OFF>,END
-    while (read_idx < recv_idx)
+    //format: R,<1-128>,<1/0>,E
+    while ((read_idx < recv_idx) || Serial.available())
     {
         //blink LED when there's activity
         LED_status ^= 1;
         digitalWrite(STATUS_LED_PIN, LED_status);
 
+        char tmp_char = 0;
+
+        if (Serial.available())
+        {
+            tmp_char = Serial.read();
+        }
+        else
+        {
+            tmp_char = read_buffer[read_idx];
+            read_idx++;
+        }
+
         #ifdef DEBUG
         Serial.print("Received: ");
-        Serial.println(read_buffer[read_idx]); // Print latest data written into the buffer by the interrupt
+        Serial.println(tmp_char); // Print latest data written into the buffer by the interrupt
         #endif
-
-        char tmp_char = read_buffer[read_idx];
-        read_idx++;
 
         //wraparound handling when done reading all received buffer or buffer overflow
         if ( (read_idx == recv_idx) || (read_idx >= MAX_READ_BUFFER) )
