@@ -9,7 +9,7 @@
 
 #define NOP __asm__("nop\n\t") //"nop" executes in one machine cycle (at 16 MHz) yielding a 62.5 ns delay
 
-//#define USE_SPI // uncomment to use as SPI slave
+#define USE_SPI // uncomment to use as SPI slave
 //#define DEBUG // uncomment this line to print debug data to the serial bus
 #define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
 //#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
@@ -40,7 +40,7 @@ typedef struct _relay_map_t
 }relay_map_t;
 
 PCA9540BD multiplexer_U1; //PCA9540BD Mux (0x70)
-#if USE_SPI
+#ifdef USE_SPI
 Sercom0SPISlave SPISlave; // to use a different SERCOM, change this line and find and replace all SERCOM0 with the SERCOM of your choice
 #endif
 //multiplex channel 0
@@ -255,7 +255,7 @@ void setup() {
 
     Serial.print("SMU Relay (Slave)");
     Serial.println(app_ver);
-#if USE_SPI
+#ifdef USE_SPI
     SPISlave.SercomInit(SPISlave.MOSI_Pins::PA04, SPISlave.SCK_Pins::PA05, SPISlave.SS_Pins::PA06, SPISlave.MISO_Pins::PA07);
 #endif
     Wire.begin(); //need to start the Wire for I2C devices to function
@@ -311,7 +311,7 @@ void loop() {
     // put your main code here, to run repeatedly:
     //get request from Master
     //format: R,<1-128>,<1/0>,E
-#if USE_SPI
+#ifdef USE_SPI
     while (read_idx < recv_idx)
 #else
     if (Serial.available())
@@ -322,17 +322,17 @@ void loop() {
         digitalWrite(STATUS_LED_PIN, LED_status);
 
         char tmp_char = 0;
-#if USE_SPI
+#ifdef USE_SPI
         tmp_char = read_buffer[read_idx];
         read_idx++;
 #else
         tmp_char = Serial.read();
 #endif
 
-        #ifdef DEBUG
+#ifdef DEBUG
         Serial.print("Received: ");
         Serial.println(tmp_char); // Print latest data written into the buffer by the interrupt
-        #endif
+#endif
 
         //wraparound handling when done reading all received buffer or buffer overflow
         if ( (read_idx == recv_idx) || (read_idx >= MAX_READ_BUFFER) )
@@ -436,7 +436,7 @@ void loop() {
     delay(1000); // Delay of 1 s to keep the main loop running, while data is written to the serial every time the Data Received Interrupt is triggered
     #endif
 }
-#if USE_SPI
+#ifdef USE_SPI
 void SERCOM0_Handler()
 /*
 Reference: Atmel-42181G-SAM-D21_Datasheet section 26.8.6 on page 503
