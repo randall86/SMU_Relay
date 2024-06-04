@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 1.0 (18/04/2024)
+// Rev 2.0 (04/06/2024)
 // - Maxtrax
 
 #include <Wire.h>
@@ -8,6 +8,7 @@
 #include <DTIOI2CtoParallelConverter.h>
 
 //#define DEBUG // uncomment this line to print debug data to the serial bus
+#define RUN_RELAY_TEST //uncomment to perform relay test loop
 
 #define SPI_TRANSFER_CLOCK_FREQ_2 2000000
 #define SPI_TRANSFER_CLOCK_FREQ_4 4000000
@@ -17,7 +18,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_2
 
-const char * app_ver = "v1.0";
+const char * app_ver = "v2.0";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -72,6 +73,73 @@ byte SPI_CS_PINS[TOTAL_CS_PINS]= {
     SPI_CS7_PIN,
     SPI_CS8_PIN
 };
+
+void runRelayTestLoop()
+{
+    digitalWrite(DIAG_LED_PIN, HIGH);
+
+    // test slot 0 relays - master board
+    for (byte pin = 0; pin < 16; pin++)
+    {
+        // send relay ON command
+        relayWriteWrapper(pin, true);
+
+        //sleep 1s
+        delay(1000);
+
+        // send relay OFF command
+        relayWriteWrapper(pin, false);
+    }
+
+    // construct relay commands
+    String on_cmd[128];
+    String off_cmd[128];
+    for (byte relay = 0; relay < 128; relay++)
+    {
+        on_cmd[relay] = (String(RELAY_CHAR) + String(DELIM) + String(relay+1) + String(DELIM) + String(ON_CHAR) + String(DELIM) + String(END_CHAR));
+        off_cmd[relay] = (String(RELAY_CHAR) + String(DELIM) + String(relay+1) + String(DELIM) + String(OFF_CHAR) + String(DELIM) + String(END_CHAR));
+    }
+
+    // test slot 1-8 relays - slave board
+    for (byte slot = 0; slot < 8; slot++)
+    {
+        SPI.beginTransaction(settings);
+        digitalWrite(SPI_CS_PINS[slot], LOW);
+
+        for (byte relay = 0; relay < 128; relay++)
+        {
+            // send relay ON command
+            const char * on_cmd_ptr = on_cmd[relay].c_str();
+            for (byte i = 0; i <= strlen(on_cmd_ptr); i++)
+            {
+            #ifdef DEBUG
+                Serial.println(on_cmd_ptr[i]); // Print latest data sent to SPI slave
+            #endif
+                SPI.transfer(on_cmd_ptr[i]);
+                delayMicroseconds(1000); // play with this parameter
+            }
+
+            //sleep 1s
+            delay(1000);
+
+            // send relay OFF command
+            const char * off_cmd_ptr = off_cmd[relay].c_str();
+            for (byte i = 0; i <= strlen(off_cmd_ptr); i++)
+            {
+            #ifdef DEBUG
+                Serial.println(off_cmd_ptr[i]); // Print latest data sent to SPI slave
+            #endif
+                SPI.transfer(off_cmd_ptr[i]);
+                delayMicroseconds(1000); // play with this parameter
+            }
+        }
+
+        digitalWrite(SPI_CS_PINS[slot], HIGH);
+        SPI.endTransaction();
+    }
+
+    digitalWrite(DIAG_LED_PIN, LOW);
+}
 
 void relayWriteWrapper(byte pinNum, bool state)
 {
@@ -135,6 +203,12 @@ void setup() {
     ioExp1_U3.portMode1(ALLOUTPUT);
     ioExp1_U3.digitalWritePort0(0);
     ioExp1_U3.digitalWritePort1(0);
+
+    pinMode(DIAG_LED_PIN, OUTPUT);
+
+#ifdef RUN_RELAY_TEST
+    runRelayTestLoop();
+#endif
 }
 
 void loop() {
@@ -207,7 +281,7 @@ void loop() {
                             digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
 
                             //start sending to SPI lines begining of RELAY request type
-                            for(int i = delim2_idx+1; i <= cmd_idx; i++)
+                            for (int i = delim2_idx+1; i <= cmd_idx; i++)
                             {
                             #ifdef DEBUG
                                 Serial.println(cmd_str[i]); // Print latest data sent to SPI slave

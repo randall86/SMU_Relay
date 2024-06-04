@@ -1,5 +1,5 @@
 // SMU Relay (Slave)
-// Rev 1.0 (18/04/2024)
+// Rev 2.0 (04/05/2024)
 // - Maxtrax
 
 #include <Wire.h>
