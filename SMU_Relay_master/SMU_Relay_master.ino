@@ -89,6 +89,9 @@ void runRelayTestLoop()
 
         // send relay OFF command
         relayWriteWrapper(pin, false);
+
+        //sleep 1s
+        delay(1000);
     }
 
     // construct relay commands
@@ -132,6 +135,9 @@ void runRelayTestLoop()
                 SPI.transfer(off_cmd_ptr[i]);
                 delayMicroseconds(1000); // play with this parameter
             }
+
+            //sleep 1s
+            delay(1000);
         }
 
         digitalWrite(SPI_CS_PINS[slot], HIGH);
