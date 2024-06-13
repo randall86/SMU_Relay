@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 2.0 (04/06/2024)
+// Rev 2.1 (13/06/2024)
 // - Maxtrax
 
 #include <Wire.h>
@@ -9,6 +9,18 @@
 
 //#define DEBUG // uncomment this line to print debug data to the serial bus
 #define RUN_RELAY_TEST //uncomment to perform relay test loop
+//#define MASTER_TEST //uncomment to perform relay test loop on master board
+#define SLAVE_TEST //uncomment to perform relay test loop on slave board
+
+//----------------------------------------------
+// update the below configurations for loop test
+//----------------------------------------------
+#define SLAVE_SLOT_START 1
+#define SLAVE_SLOT_END 8
+#define SLAVE_RELAY_START 1
+#define SLAVE_RELAY_END 128
+#define TEST_DELAY_MSEC 1000
+//----------------------------------------------
 
 #define SPI_TRANSFER_CLOCK_FREQ_2 2000000
 #define SPI_TRANSFER_CLOCK_FREQ_4 4000000
@@ -18,7 +30,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_2
 
-const char * app_ver = "v2.0";
+const char * app_ver = "v2.1";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -40,7 +52,7 @@ const byte SPI_CS5_PIN = 4;
 const byte SPI_CS6_PIN = 5;
 const byte SPI_CS7_PIN = 6;
 const byte SPI_CS8_PIN = 7;
-const byte TOTAL_CS_PINS = 8;
+const byte MAX_SLAVE_BOARD = 8;
 
 const int MAX_BUFFERED_CMD = 32;
 
@@ -63,7 +75,7 @@ int delim5_idx = 0;
 int cmd_idx = 0;
 char cmd_str[MAX_BUFFERED_CMD] = {};
 
-byte SPI_CS_PINS[TOTAL_CS_PINS]= {
+byte SPI_CS_PINS[MAX_SLAVE_BOARD]= {
     SPI_CS1_PIN,
     SPI_CS2_PIN,
     SPI_CS3_PIN,
@@ -74,26 +86,37 @@ byte SPI_CS_PINS[TOTAL_CS_PINS]= {
     SPI_CS8_PIN
 };
 
+byte SLAVE_DET_PINS[MAX_SLAVE_BOARD]= {
+    PIN1_0,
+    PIN1_1,
+    PIN1_2,
+    PIN1_3,
+    PIN1_4,
+    PIN1_5,
+    PIN1_6,
+    PIN1_7
+};
+
 void runRelayTestLoop()
 {
     digitalWrite(DIAG_LED_PIN, HIGH);
-
+#ifdef MASTER_TEST
     // test slot 0 relays - master board
     for (byte pin = 0; pin < 16; pin++)
     {
         // send relay ON command
         relayWriteWrapper(pin, true);
 
-        //sleep 1s
-        delay(1000);
+        delay(TEST_DELAY_MSEC);
 
         // send relay OFF command
         relayWriteWrapper(pin, false);
 
-        //sleep 1s
-        delay(1000);
+        delay(TEST_DELAY_MSEC);
     }
-
+#endif
+    delay(1000);
+#ifdef SLAVE_TEST
     // construct relay commands
     String on_cmd[128];
     String off_cmd[128];
@@ -104,45 +127,59 @@ void runRelayTestLoop()
     }
 
     // test slot 1-8 relays - slave board
-    for (byte slot = 0; slot < 8; slot++)
+    for (byte slot = SLAVE_SLOT_START - 1; slot < SLAVE_SLOT_END; slot++)
     {
-        SPI.beginTransaction(settings);
-        digitalWrite(SPI_CS_PINS[slot], LOW);
-
-        for (byte relay = 0; relay < 128; relay++)
+        if (ioExp1_U2.digitalRead1(SLAVE_DET_PINS[slot]))
         {
-            // send relay ON command
-            const char * on_cmd_ptr = on_cmd[relay].c_str();
-            for (byte i = 0; i <= strlen(on_cmd_ptr); i++)
+            Serial.print('S');
+            Serial.print(slot);
+            Serial.print(':');
+            Serial.println(ACK_STR);
+
+            SPI.beginTransaction(settings);
+            digitalWrite(SPI_CS_PINS[slot], LOW);
+
+            for (byte relay = SLAVE_RELAY_START - 1; relay < SLAVE_RELAY_END; relay++)
             {
-            #ifdef DEBUG
-                Serial.println(on_cmd_ptr[i]); // Print latest data sent to SPI slave
-            #endif
-                SPI.transfer(on_cmd_ptr[i]);
-                delayMicroseconds(1000); // play with this parameter
+                // send relay ON command
+                const char * on_cmd_ptr = on_cmd[relay].c_str();
+                for (byte i = 0; i <= strlen(on_cmd_ptr); i++)
+                {
+                #ifdef DEBUG
+                    Serial.println(on_cmd_ptr[i]); // Print latest data sent to SPI slave
+                #endif
+                    SPI.transfer(on_cmd_ptr[i]);
+                    delayMicroseconds(1000); // play with this parameter - for SPI delay
+                }
+
+                delay(TEST_DELAY_MSEC);
+
+                // send relay OFF command
+                const char * off_cmd_ptr = off_cmd[relay].c_str();
+                for (byte i = 0; i <= strlen(off_cmd_ptr); i++)
+                {
+                #ifdef DEBUG
+                    Serial.println(off_cmd_ptr[i]); // Print latest data sent to SPI slave
+                #endif
+                    SPI.transfer(off_cmd_ptr[i]);
+                    delayMicroseconds(1000); // play with this parameter - for SPI delay
+                }
+
+                delay(TEST_DELAY_MSEC);
             }
 
-            //sleep 1s
-            delay(1000);
-
-            // send relay OFF command
-            const char * off_cmd_ptr = off_cmd[relay].c_str();
-            for (byte i = 0; i <= strlen(off_cmd_ptr); i++)
-            {
-            #ifdef DEBUG
-                Serial.println(off_cmd_ptr[i]); // Print latest data sent to SPI slave
-            #endif
-                SPI.transfer(off_cmd_ptr[i]);
-                delayMicroseconds(1000); // play with this parameter
-            }
-
-            //sleep 1s
-            delay(1000);
+            digitalWrite(SPI_CS_PINS[slot], HIGH);
+            SPI.endTransaction();
         }
-
-        digitalWrite(SPI_CS_PINS[slot], HIGH);
-        SPI.endTransaction();
+        else
+        {
+            Serial.print('S');
+            Serial.print(slot);
+            Serial.print(':');
+            Serial.println(NACK_STR);
+        }
     }
+#endif
 
     digitalWrite(DIAG_LED_PIN, LOW);
 }
@@ -195,7 +232,7 @@ void setup() {
     pinMode(SPI_CS7_PIN, OUTPUT);
     pinMode(SPI_CS8_PIN, OUTPUT);
     
-    for (byte i = 0; i < TOTAL_CS_PINS; i++)
+    for (byte i = 0; i < MAX_SLAVE_BOARD; i++)
     {
         digitalWrite(SPI_CS_PINS[i], HIGH);
     }
@@ -211,14 +248,13 @@ void setup() {
     ioExp1_U3.digitalWritePort1(0);
 
     pinMode(DIAG_LED_PIN, OUTPUT);
-
-#ifdef RUN_RELAY_TEST
-    runRelayTestLoop();
-#endif
 }
 
 void loop() {
     // put your main code here, to run repeatedly:
+#ifdef RUN_RELAY_TEST
+    runRelayTestLoop();
+#else
     if (Serial.available())
     {
         char tmp_char = Serial.read();
@@ -371,4 +407,5 @@ void loop() {
             }
         }
     }
+#endif
 }
