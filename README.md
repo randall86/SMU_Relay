@@ -8,5 +8,3 @@ DTIOI2CtoParallelConverter - https://code.google.com/archive/p/pca9539-arduino-l
 SercomSPISlave - https://github.com/lenvm/SercomSPISlave
 
 PCA9540BD - https://github.com/sdrdis/PCA9540BD
-
-Scheduler - https://github.com/arduino-libraries/Scheduler

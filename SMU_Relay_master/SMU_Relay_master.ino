@@ -4,7 +4,6 @@
 
 #include <Wire.h>
 #include <SPI.h>
-#include <Scheduler.h>
 #include <PCA9540BD.h>
 #include <DTIOI2CtoParallelConverter.h>
 
@@ -68,7 +67,6 @@ bool second_delim_found = false;
 bool third_delim_found = false;
 bool fourth_delim_found = false;
 bool fifth_delim_found = false;
-bool spi_in_transfer = false;
 int delim1_idx = 0;
 int delim2_idx = 0;
 int delim3_idx = 0;
@@ -76,9 +74,6 @@ int delim4_idx = 0;
 int delim5_idx = 0;
 int cmd_idx = 0;
 char cmd_str[MAX_BUFFERED_CMD] = {};
-char spi_buf[MAX_BUFFERED_CMD/2] = {};
-byte spi_cs = 0;
-byte spi_transfer_len = 0;
 
 byte SPI_CS_PINS[MAX_SLAVE_BOARD]= {
     SPI_CS1_PIN,
@@ -154,7 +149,7 @@ void runRelayTestLoop()
                     Serial.println(on_cmd_ptr[i]); // Print latest data sent to SPI slave
                 #endif
                     SPI.transfer(on_cmd_ptr[i]);
-                    delayMicroseconds(500); // play with this parameter - for SPI delay
+                    delayMicroseconds(1000); // play with this parameter - for SPI delay
                 }
 
                 delay(TEST_DELAY_MSEC);
@@ -167,7 +162,7 @@ void runRelayTestLoop()
                     Serial.println(off_cmd_ptr[i]); // Print latest data sent to SPI slave
                 #endif
                     SPI.transfer(off_cmd_ptr[i]);
-                    delayMicroseconds(500); // play with this parameter - for SPI delay
+                    delayMicroseconds(1000); // play with this parameter - for SPI delay
                 }
 
                 delay(TEST_DELAY_MSEC);
@@ -216,30 +211,6 @@ void resetBuffer()
     memset(cmd_str, 0, MAX_BUFFERED_CMD);
 }
 
-void handleSPI()
-{
-    noInterrupts(); //disable interrupts
-    if (spi_in_transfer)
-    {
-        SPI.beginTransaction(settings);
-        digitalWrite(spi_cs, LOW);
-        
-        //start sending to SPI lines begining of RELAY request type
-        for (int i = 0; i < spi_transfer_len; i++)
-        {
-            SPI.transfer(spi_buf[i]);
-            delayMicroseconds(500); // play with this parameter
-        }
-        
-        digitalWrite(spi_cs, HIGH);
-        SPI.endTransaction();
-
-        spi_in_transfer = false;
-    }
-    interrupts(); //re-enable interrupts
-    yield(); //yield to pass control to other tasks
-}
-
 void setup() {
     // put your setup code here, to run once:
     // Open serial communications and wait for port to open:
@@ -277,8 +248,6 @@ void setup() {
     ioExp1_U3.digitalWritePort1(0);
 
     pinMode(DIAG_LED_PIN, OUTPUT);
-    
-    Scheduler.startLoop(handleSPI); //SPI thread
 }
 
 void loop() {
@@ -350,22 +319,21 @@ void loop() {
 
                         if ( (SLOT_num >= 1) && (SLOT_num <= 8) ) //SLOT 1-8 are external relays
                         {
-                        #ifdef DEBUG
+                            SPI.beginTransaction(settings);
+                            digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
+
+                            //start sending to SPI lines begining of RELAY request type
                             for (int i = delim2_idx+1; i <= cmd_idx; i++)
                             {
+                            #ifdef DEBUG
                                 Serial.println(cmd_str[i]); // Print latest data sent to SPI slave
-                            }
-                        #endif
-
-                            while (spi_in_transfer) // block here in case SPI transfer in progress
-                            {
-                                delay(1000);
+                            #endif
+                                SPI.transfer(cmd_str[i]);
+                                delayMicroseconds(1000); // play with this parameter
                             }
 
-                            spi_cs = SPI_CS_PINS[SLOT_num-1];
-                            spi_transfer_len = cmd_idx+1;
-                            memcpy(spi_buf, &cmd_str[delim2_idx+1], spi_transfer_len);
-                            spi_in_transfer = true;
+                            digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
+                            SPI.endTransaction();
 
                             Serial.print(ACK_STR);
                         }
