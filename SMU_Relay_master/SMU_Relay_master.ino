@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 2.1 (13/06/2024)
+// Rev 2.2 (21/06/2024)
 // - Maxtrax
 
 #include <Wire.h>
@@ -8,18 +8,18 @@
 #include <DTIOI2CtoParallelConverter.h>
 
 //#define DEBUG // uncomment this line to print debug data to the serial bus
-#define RUN_RELAY_TEST //uncomment to perform relay test loop
+//#define RUN_RELAY_TEST //uncomment to perform relay test loop
 //#define MASTER_TEST //uncomment to perform relay test loop on master board
-#define SLAVE_TEST //uncomment to perform relay test loop on slave board
+//#define SLAVE_TEST //uncomment to perform relay test loop on slave board
 
 //----------------------------------------------
 // update the below configurations for loop test
 //----------------------------------------------
-#define SLAVE_SLOT_START 1
-#define SLAVE_SLOT_END 8
-#define SLAVE_RELAY_START 1
-#define SLAVE_RELAY_END 128
-#define TEST_DELAY_MSEC 1000
+#define SLAVE_SLOT_START 2
+#define SLAVE_SLOT_END 2
+#define SLAVE_RELAY_START 13
+#define SLAVE_RELAY_END 24
+#define TEST_DELAY_MSEC 500
 //----------------------------------------------
 
 #define SPI_TRANSFER_CLOCK_FREQ_2 2000000
@@ -30,7 +30,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_2
 
-const char * app_ver = "v2.1";
+const char * app_ver = "v2.2";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -43,6 +43,7 @@ const char DELIM = ',';
 
 const byte FAULT_LED_PIN = 15; //Red
 const byte DIAG_LED_PIN = 16; //Green
+const byte SLAVE_RESET_PIN = 21;
 
 const byte SPI_CS1_PIN = 0;
 const byte SPI_CS2_PIN = 1;
@@ -236,6 +237,11 @@ void setup() {
     {
         digitalWrite(SPI_CS_PINS[i], HIGH);
     }
+
+    pinMode(SLAVE_RESET_PIN, OUTPUT);
+    digitalWrite(SLAVE_RESET_PIN, HIGH);
+    delay(5); //5ms for slaves to reset
+    digitalWrite(SLAVE_RESET_PIN, LOW);
 
     multiplexer_U1.selectChannel(1); // for selecting ioExp1 channel, will only be using this channel
 
