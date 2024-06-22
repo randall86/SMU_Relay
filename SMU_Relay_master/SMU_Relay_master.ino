@@ -137,8 +137,8 @@ void runRelayTestLoop()
             Serial.print(':');
             Serial.println(ACK_STR);
 
-            SPI.beginTransaction(settings);
             digitalWrite(SPI_CS_PINS[slot], LOW);
+            delay(100);
 
             for (byte relay = SLAVE_RELAY_START - 1; relay < SLAVE_RELAY_END; relay++)
             {
@@ -169,8 +169,8 @@ void runRelayTestLoop()
                 delay(TEST_DELAY_MSEC);
             }
 
+            delay(100);
             digitalWrite(SPI_CS_PINS[slot], HIGH);
-            SPI.endTransaction();
         }
         else
         {
@@ -233,6 +233,8 @@ void setup() {
     pinMode(SPI_CS7_PIN, OUTPUT);
     pinMode(SPI_CS8_PIN, OUTPUT);
     
+    //begin spi transaction here and not end it, as we're the only SPI user
+    SPI.beginTransaction(settings);
     for (byte i = 0; i < MAX_SLAVE_BOARD; i++)
     {
         digitalWrite(SPI_CS_PINS[i], HIGH);
@@ -240,7 +242,7 @@ void setup() {
 
     pinMode(SLAVE_RESET_PIN, OUTPUT);
     digitalWrite(SLAVE_RESET_PIN, HIGH);
-    delay(5); //5ms for slaves to reset
+    delay(500); //500ms for slaves to reset
     digitalWrite(SLAVE_RESET_PIN, LOW);
 
     multiplexer_U1.selectChannel(1); // for selecting ioExp1 channel, will only be using this channel
@@ -325,8 +327,8 @@ void loop() {
 
                         if ( (SLOT_num >= 1) && (SLOT_num <= 8) ) //SLOT 1-8 are external relays
                         {
-                            SPI.beginTransaction(settings);
                             digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
+                            delay(100);
 
                             //start sending to SPI lines begining of RELAY request type
                             for (int i = delim2_idx+1; i <= cmd_idx; i++)
@@ -338,8 +340,8 @@ void loop() {
                                 delayMicroseconds(1000); // play with this parameter
                             }
 
+                            delay(100);
                             digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
-                            SPI.endTransaction();
 
                             Serial.print(ACK_STR);
                         }
