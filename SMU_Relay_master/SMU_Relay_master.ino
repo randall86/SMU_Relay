@@ -327,21 +327,27 @@ void loop() {
 
                         if ( (SLOT_num >= 1) && (SLOT_num <= 8) ) //SLOT 1-8 are external relays
                         {
-                            digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
-                            delay(100);
-
-                            //start sending to SPI lines begining of RELAY request type
-                            for (int i = delim2_idx+1; i <= cmd_idx; i++)
+                            //--------------------------------------------------
+                            //HACK HACK HACK - send every command to slave twice
+                            //--------------------------------------------------
+                            for (byte j = 0; j < 2; j++)
                             {
-                            #ifdef DEBUG
-                                Serial.println(cmd_str[i]); // Print latest data sent to SPI slave
-                            #endif
-                                SPI.transfer(cmd_str[i]);
-                                delayMicroseconds(1000); // play with this parameter
-                            }
+                                digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
+                                delay(100);
 
-                            delay(100);
-                            digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
+                                //start sending to SPI lines begining of RELAY request type
+                                for (int i = delim2_idx+1; i <= cmd_idx; i++)
+                                {
+                                #ifdef DEBUG
+                                    Serial.println(cmd_str[i]); // Print latest data sent to SPI slave
+                                #endif
+                                    SPI.transfer(cmd_str[i]);
+                                    delayMicroseconds(1000); // play with this parameter
+                                }
+
+                                delay(100);
+                                digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
+                            }
 
                             Serial.print(ACK_STR);
                         }
