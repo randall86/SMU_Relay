@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 2.2 (21/06/2024)
+// Rev 2.3 (05/07/2024)
 // - Maxtrax
 
 #include <Wire.h>
@@ -22,15 +22,16 @@
 #define TEST_DELAY_MSEC 500
 //----------------------------------------------
 
+#define SPI_TRANSFER_CLOCK_FREQ_1 1000000
 #define SPI_TRANSFER_CLOCK_FREQ_2 2000000
 #define SPI_TRANSFER_CLOCK_FREQ_4 4000000
 #define SPI_TRANSFER_CLOCK_FREQ_8 8000000
 #define SPI_TRANSFER_CLOCK_FREQ_10 10000000
 #define SPI_TRANSFER_CLOCK_FREQ_12 12000000
 
-#define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_2
+#define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_1
 
-const char * app_ver = "v2.2";
+const char * app_ver = "v2.3";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -327,27 +328,21 @@ void loop() {
 
                         if ( (SLOT_num >= 1) && (SLOT_num <= 8) ) //SLOT 1-8 are external relays
                         {
-                            //--------------------------------------------------
-                            //HACK HACK HACK - send every command to slave twice
-                            //--------------------------------------------------
-                            for (byte j = 0; j < 2; j++)
+                            digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
+                            delay(100);
+
+                            //start sending to SPI lines begining of RELAY request type
+                            for (int i = delim2_idx+1; i <= cmd_idx; i++)
                             {
-                                digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
-                                delay(100);
-
-                                //start sending to SPI lines begining of RELAY request type
-                                for (int i = delim2_idx+1; i <= cmd_idx; i++)
-                                {
-                                #ifdef DEBUG
-                                    Serial.println(cmd_str[i]); // Print latest data sent to SPI slave
-                                #endif
-                                    SPI.transfer(cmd_str[i]);
-                                    delayMicroseconds(1000); // play with this parameter
-                                }
-
-                                delay(100);
-                                digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
+                            #ifdef DEBUG
+                                Serial.println(cmd_str[i]); // Print latest data sent to SPI slave
+                            #endif
+                                SPI.transfer(cmd_str[i]);
+                                delayMicroseconds(1000); // play with this parameter
                             }
+
+                            delay(100);
+                            digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
 
                             Serial.print(ACK_STR);
                         }
