@@ -1,5 +1,5 @@
 // SMU Relay (Slave)
-// Rev 2.0 (04/05/2024)
+// Rev 2.1 (26/10/2024)
 // - Maxtrax
 
 #include <Wire.h>
@@ -14,10 +14,11 @@
 #define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
 //#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
 
-const char * app_ver = "v2.0";
+const char * app_ver = "v2.1";
 
 const char END_CHAR = 'E';
 const char RELAY_CHAR = 'R';
+const char RESET_CHAR = 'X';
 const char ON_CHAR = '1';
 const char OFF_CHAR = '0';
 const char DELIM = ',';
@@ -384,21 +385,37 @@ void loop() {
                     //parse first data for request type
                     if (cmd_str[0] == RELAY_CHAR)
                     {
-                        //check for RELAY number
-                        int RELAY_num = atoi(&cmd_str[delim1_idx+1]);
-                        
-                        if ( (RELAY_num >= 1) && (RELAY_num <= 128) ) // only supports RELAY 1-128
+                        if (cmd_str[delim1_idx+1] == RESET_CHAR)
                         {
                             //check for ON/OFF
                             if (cmd_str[delim2_idx+1] == ON_CHAR)
                             {
-                                relayWriteWrapper(&relay_map[RELAY_num-1], true);
-                                Serial.println("Received RELAY ON command");
+                                Serial.println("Received RELAY X ON command. Please wait...");
+                                for (int i = 0; i < 128; i++)
+                                {
+                                    relayWriteWrapper(&relay_map[i], true);
+                                }
+                                Serial.println("RELAY X ON command done.");
                             }
                             else if (cmd_str[delim2_idx+1] == OFF_CHAR)
                             {
-                                relayWriteWrapper(&relay_map[RELAY_num-1], false);
-                                Serial.println("Received RELAY OFF command");
+                                Serial.println("Received RELAY X OFF command. Please wait...");
+                                for (int i = 0; i < 128; i++)
+                                {
+                                    relayWriteWrapper(&relay_map[i], false);
+                                }
+                                Serial.println("RELAY X OFF command done.");
+                            }
+                            else if (cmd_str[delim2_idx+1] == RESET_CHAR)
+                            {
+                                Serial.println("Received RELAY X ON <1sec> OFF command. Please wait...");
+                                for (int i = 0; i < 128; i++)
+                                {
+                                    relayWriteWrapper(&relay_map[i], true);
+                                    delay(1000);
+                                    relayWriteWrapper(&relay_map[i], false);
+                                }
+                                Serial.println("RELAY X ON <1sec> OFF command done.");
                             }
                             else
                             {
@@ -407,7 +424,31 @@ void loop() {
                         }
                         else
                         {
-                            Serial.println("ERROR: unknown RELAY");
+                            //check for RELAY number
+                            int RELAY_num = atoi(&cmd_str[delim1_idx+1]);
+
+                            if ( (RELAY_num >= 1) && (RELAY_num <= 128) ) // only supports RELAY 1-128
+                            {
+                                //check for ON/OFF
+                                if (cmd_str[delim2_idx+1] == ON_CHAR)
+                                {
+                                    relayWriteWrapper(&relay_map[RELAY_num-1], true);
+                                    Serial.println("Received RELAY ON command");
+                                }
+                                else if (cmd_str[delim2_idx+1] == OFF_CHAR)
+                                {
+                                    relayWriteWrapper(&relay_map[RELAY_num-1], false);
+                                    Serial.println("Received RELAY OFF command");
+                                }
+                                else
+                                {
+                                    Serial.println("ERROR: unknown RELAY command");
+                                }
+                            }
+                            else
+                            {
+                                Serial.println("ERROR: unknown RELAY");
+                            }
                         }
                     }
                     else
