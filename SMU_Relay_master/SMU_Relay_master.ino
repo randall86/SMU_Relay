@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 2.3 (05/07/2024)
+// Rev 2.4 (26/10/2024)
 // - Maxtrax
 
 #include <Wire.h>
@@ -31,13 +31,15 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_1
 
-const char * app_ver = "v2.3";
+const char * app_ver = "v2.4";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
 const char SLOT_CHAR = 'S';
 const char END_CHAR = 'E';
 const char RELAY_CHAR = 'R';
+const char RESET_CHAR = 'X';
+const char FRESET_CHAR = 'F';
 const char ON_CHAR = '1';
 const char OFF_CHAR = '0';
 const char DELIM = ',';
@@ -351,22 +353,47 @@ void loop() {
                             //parse next data for RELAY request type
                             if (cmd_str[delim2_idx+1] == RELAY_CHAR)
                             {
-                                //check for RELAY number
-                                int RELAY_num = atoi(&cmd_str[delim3_idx+1]);
-                                
-                                if ( (RELAY_num >= 1) && (RELAY_num <= 16) ) // only supports RELAY 1-16
+                                if (cmd_str[delim3_idx+1] == RESET_CHAR)
                                 {
                                     //check for ON/OFF
                                     if (cmd_str[delim4_idx+1] == ON_CHAR)
                                     {
-                                        relayWriteWrapper(RELAY_num-1, true);
-                                        //Serial.println("Received RELAY:ON command");
+                                        //Serial.println("Received RELAY X ON command. Please wait...");
+                                        for (int i = 0; i < 16; i++)
+                                        {
+                                            relayWriteWrapper(i, true);
+                                        }
+                                        //Serial.println("RELAY X ON command done.");
                                         Serial.print(ACK_STR);
                                     }
                                     else if (cmd_str[delim4_idx+1] == OFF_CHAR)
                                     {
-                                        relayWriteWrapper(RELAY_num-1, false);
-                                        //Serial.println("Received RELAY:OFF command");
+                                        //Serial.println("Received RELAY X OFF command. Please wait...");
+                                        for (int i = 0; i < 16; i++)
+                                        {
+                                            relayWriteWrapper(i, false);
+                                        }
+                                        //Serial.println("RELAY X OFF command done.");
+                                        Serial.print(ACK_STR);
+                                    }
+                                    else if (cmd_str[delim4_idx+1] == RESET_CHAR)
+                                    {
+                                        //Serial.println("Received RELAY X ON <1sec> OFF command. Please wait...");
+                                        for (int i = 0; i < 16; i++)
+                                        {
+                                            relayWriteWrapper(i, true);
+                                            delay(1000);
+                                            relayWriteWrapper(i, false);
+                                        }
+                                        //Serial.println("RELAY X ON <1sec> OFF command done.");
+                                        Serial.print(ACK_STR);
+                                    }
+                                    else if (cmd_str[delim4_idx+1] == FRESET_CHAR)
+                                    {
+                                        pinMode(SLAVE_RESET_PIN, OUTPUT);
+                                        digitalWrite(SLAVE_RESET_PIN, HIGH);
+                                        delay(500); //500ms for slaves to reset
+                                        digitalWrite(SLAVE_RESET_PIN, LOW);
                                         Serial.print(ACK_STR);
                                     }
                                     else
@@ -377,8 +404,35 @@ void loop() {
                                 }
                                 else
                                 {
-                                    //Serial.println("ERROR: unknown RELAY");
-                                    Serial.print(NACK_STR);
+                                    //check for RELAY number
+                                    int RELAY_num = atoi(&cmd_str[delim3_idx+1]);
+
+                                    if ( (RELAY_num >= 1) && (RELAY_num <= 16) ) // only supports RELAY 1-16
+                                    {
+                                        //check for ON/OFF
+                                        if (cmd_str[delim4_idx+1] == ON_CHAR)
+                                        {
+                                            relayWriteWrapper(RELAY_num-1, true);
+                                            //Serial.println("Received RELAY:ON command");
+                                            Serial.print(ACK_STR);
+                                        }
+                                        else if (cmd_str[delim4_idx+1] == OFF_CHAR)
+                                        {
+                                            relayWriteWrapper(RELAY_num-1, false);
+                                            //Serial.println("Received RELAY:OFF command");
+                                            Serial.print(ACK_STR);
+                                        }
+                                        else
+                                        {
+                                            //Serial.println("ERROR: unknown RELAY command");
+                                            Serial.print(NACK_STR);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        //Serial.println("ERROR: unknown RELAY");
+                                        Serial.print(NACK_STR);
+                                    }
                                 }
                             }
                             else
