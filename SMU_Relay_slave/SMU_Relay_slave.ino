@@ -1,5 +1,5 @@
 // SMU Relay (Slave)
-// Rev 2.1 (26/10/2024)
+// Rev 3.0 (06/12/2024)
 // - Maxtrax
 
 #include <Wire.h>
@@ -9,12 +9,14 @@
 
 #define NOP __asm__("nop\n\t") //"nop" executes in one machine cycle (at 16 MHz) yielding a 62.5 ns delay
 
+#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
+
 #define USE_SPI // uncomment to use as SPI slave
 //#define DEBUG // uncomment this line to print debug data to the serial bus
 #define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
 //#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
 
-const char * app_ver = "v2.1";
+const char * app_ver = "v3.0";
 
 const char END_CHAR = 'E';
 const char RELAY_CHAR = 'R';
@@ -30,8 +32,19 @@ const byte IOEXP0_RESET_PIN = 4;
 const byte IOEXP1_RESET_PIN = 5;
 
 const int MAX_INT_DATA = 3;
-const int MAX_BUFFERED_CMD = 32;
+const int MAX_BUFFERED_CMD = 64;
 const int MAX_READ_BUFFER = 128;
+
+const int MAX_DELIMS = 16;
+
+//supported on/off durations in ms
+const int DURATION_MS[5] = {
+    100,
+    200,
+    300,
+    400,
+    500
+};
 
 typedef struct _relay_map_t
 {
@@ -55,12 +68,8 @@ DTIOI2CtoParallelConverter ioExp1_U4(0x75);  //PCA9555 I/O Expander (with A1 = 0
 DTIOI2CtoParallelConverter ioExp1_U5(0x76);  //PCA9555 I/O Expander (with A1 = 1 and A0 = 0)
 DTIOI2CtoParallelConverter ioExp1_U6(0x77);  //PCA9555 I/O Expander (with A1 = 1 and A0 = 1)
 
-bool first_delim_found = false;
-bool second_delim_found = false;
-bool third_delim_found = false;
-int delim1_idx = 0;
-int delim2_idx = 0;
-int delim3_idx = 0;
+int delim_count = 0;
+int delim_idx[MAX_DELIMS] = {};
 int cmd_idx = 0;
 int int_idx = 0;
 int recv_idx = 0;
@@ -203,6 +212,15 @@ relay_map_t relay_map[128] = {
     {&ioExp1_U6, 1, 15}
 };
 
+#ifdef VERBOSE_REPLY
+void printReply(const char * reply)
+{
+    Serial.println(reply);
+}
+#else
+void printReply(const char * /*reply*/) {};
+#endif
+
 void relayWriteWrapper(relay_map_t *p_relay, bool state)
 {
     if (NULL != p_relay)
@@ -224,12 +242,8 @@ void relayWriteWrapper(relay_map_t *p_relay, bool state)
 
 void resetBuffer()
 {
-    delim1_idx = 0;
-    delim2_idx = 0;
-    delim3_idx = 0;
-    first_delim_found = false;
-    second_delim_found = false;
-    third_delim_found = false;
+    delim_count = 0;
+    memset(delim_idx, 0, sizeof(delim_idx));
     memset(cmd_str, 0, MAX_BUFFERED_CMD);
 }
 
@@ -356,117 +370,196 @@ void loop() {
 
             if (cmd_str[cmd_idx] == DELIM)
             {
-                //1st delimiter found
-                if (!first_delim_found)
+                if (delim_count < MAX_DELIMS)
                 {
-                    delim1_idx = cmd_idx;
-                    first_delim_found = true;
-                }
-                //2nd delimiter found
-                else if (first_delim_found && !second_delim_found)
-                {
-                    delim2_idx = cmd_idx;
-                    second_delim_found = true;
-                }
-                //3rd delimiter found
-                else
-                {
-                    delim3_idx = cmd_idx;
-                    third_delim_found = true;
+                    delim_idx[delim_count] = cmd_idx;
+                    delim_count++;
                 }
             }
-            
-            //3nd delimiter found and at least 1 byte arrived after 3nd delimiter
-            if ( (third_delim_found) && (cmd_idx >= delim3_idx + 1) )
+
+            //check for END, after 2nd or 6th delimiter found and 
+            //at least 1 byte arrived after the delimiter
+            if ( ((delim_count == 3) || (delim_count == 7)) && 
+                (cmd_idx > delim_idx[delim_count-1]) &&
+                (cmd_str[delim_idx[delim_count-1]+1] == END_CHAR) )
             {
-                //check for END
-                if (cmd_str[delim3_idx+1] == END_CHAR)
+                //parse first data for request type
+                if (cmd_str[0] == RELAY_CHAR)
                 {
-                    //parse first data for request type
-                    if (cmd_str[0] == RELAY_CHAR)
+                    if (cmd_str[delim_idx[0]+1] == RESET_CHAR)
                     {
-                        if (cmd_str[delim1_idx+1] == RESET_CHAR)
+                        //check for ON/OFF
+                        if (cmd_str[delim_idx[1]+1] == ON_CHAR)
                         {
-                            //check for ON/OFF
-                            if (cmd_str[delim2_idx+1] == ON_CHAR)
+                            printReply("Received RELAY X ON command. Please wait...");
+                            for (int i = 0; i < 128; i++)
                             {
-                                Serial.println("Received RELAY X ON command. Please wait...");
-                                for (int i = 0; i < 128; i++)
-                                {
-                                    relayWriteWrapper(&relay_map[i], true);
-                                }
-                                Serial.println("RELAY X ON command done.");
+                                relayWriteWrapper(&relay_map[i], true);
                             }
-                            else if (cmd_str[delim2_idx+1] == OFF_CHAR)
+                            printReply("RELAY X ON command done.");
+                        }
+                        else if (cmd_str[delim_idx[1]+1] == OFF_CHAR)
+                        {
+                            printReply("Received RELAY X OFF command. Please wait...");
+                            for (int i = 0; i < 128; i++)
                             {
-                                Serial.println("Received RELAY X OFF command. Please wait...");
-                                for (int i = 0; i < 128; i++)
-                                {
-                                    relayWriteWrapper(&relay_map[i], false);
-                                }
-                                Serial.println("RELAY X OFF command done.");
+                                relayWriteWrapper(&relay_map[i], false);
                             }
-                            else if (cmd_str[delim2_idx+1] == RESET_CHAR)
+                            printReply("RELAY X OFF command done.");
+                        }
+                        else if (cmd_str[delim_idx[1]+1] == RESET_CHAR)
+                        {
+                            printReply("Received RELAY X ON <1sec> OFF command. Please wait...");
+                            for (int i = 0; i < 128; i++)
                             {
-                                Serial.println("Received RELAY X ON <1sec> OFF command. Please wait...");
-                                for (int i = 0; i < 128; i++)
-                                {
-                                    relayWriteWrapper(&relay_map[i], true);
-                                    delay(1000);
-                                    relayWriteWrapper(&relay_map[i], false);
-                                }
-                                Serial.println("RELAY X ON <1sec> OFF command done.");
+                                relayWriteWrapper(&relay_map[i], true);
+                                delay(1000);
+                                relayWriteWrapper(&relay_map[i], false);
                             }
-                            else
-                            {
-                                Serial.println("ERROR: unknown RELAY command");
-                            }
+                            printReply("RELAY X ON <1sec> OFF command done.");
                         }
                         else
                         {
-                            //check for RELAY number
-                            int RELAY_num = atoi(&cmd_str[delim1_idx+1]);
-
-                            if ( (RELAY_num >= 1) && (RELAY_num <= 128) ) // only supports RELAY 1-128
-                            {
-                                //check for ON/OFF
-                                if (cmd_str[delim2_idx+1] == ON_CHAR)
-                                {
-                                    relayWriteWrapper(&relay_map[RELAY_num-1], true);
-                                    Serial.println("Received RELAY ON command");
-                                }
-                                else if (cmd_str[delim2_idx+1] == OFF_CHAR)
-                                {
-                                    relayWriteWrapper(&relay_map[RELAY_num-1], false);
-                                    Serial.println("Received RELAY OFF command");
-                                }
-                                else
-                                {
-                                    Serial.println("ERROR: unknown RELAY command");
-                                }
-                            }
-                            else
-                            {
-                                Serial.println("ERROR: unknown RELAY");
-                            }
+                            printReply("ERROR: unknown RELAY command");
                         }
                     }
                     else
                     {
-                        Serial.println("ERROR: unknown RELAY request");
+                        if (delim_count == 3)
+                        {
+                            //check for RELAY number
+                            int RELAY_num = atoi(&cmd_str[delim_idx[0]+1]);
+    
+                            if ( (RELAY_num >= 1) && (RELAY_num <= 128) ) // only supports RELAY 1-128
+                            {
+                                //check for ON/OFF
+                                if (cmd_str[delim_idx[1]+1] == ON_CHAR)
+                                {
+                                    relayWriteWrapper(&relay_map[RELAY_num-1], true);
+                                    printReply("Received RELAY ON command");
+                                }
+                                else if (cmd_str[delim_idx[1]+1] == OFF_CHAR)
+                                {
+                                    relayWriteWrapper(&relay_map[RELAY_num-1], false);
+                                    printReply("Received RELAY OFF command");
+                                }
+                                else
+                                {
+                                    printReply("ERROR: unknown RELAY command");
+                                }
+                            }
+                            else
+                            {
+                                printReply("ERROR: unknown RELAY");
+                            }
+                        }
+                        else if (delim_count == 7)
+                        {
+                            //check for RELAY numbers
+                            bool is_err = false;
+                            int RELAY_num[4] = {};
+                            int total_relays = 0;
+                            for (int i = 0; i < 4; i++)
+                            {
+                                int tmp = atoi(&cmd_str[delim_idx[i]+1]);
+                                if ( (tmp >= 1) && (tmp <= 128) ) // only supports RELAY 1-128
+                                {
+                                    RELAY_num[total_relays] = tmp;
+                                    total_relays++;
+                                }
+                                else if (tmp != 0)
+                                {
+                                    printReply("ERROR: unknown RELAY");
+                                    is_err = true;
+                                }
+                            }
+                            
+                            //check for ON/OFF
+                            if ( (!is_err) && (cmd_str[delim_idx[4]+1] == ON_CHAR) )
+                            {
+                                //loop through all RELAY numbers to ON
+                                for (int i = 0; i < total_relays; i++)
+                                {
+                                    relayWriteWrapper(&relay_map[RELAY_num[i]-1], true);
+                                    printReply("Received RELAY:ON command");
+                                }
+                            }
+                            else if ( (!is_err) && (cmd_str[delim_idx[4]+1] == OFF_CHAR) )
+                            {
+                                //loop through all RELAY numbers to OFF
+                                for (int i = 0; i < total_relays; i++)
+                                {
+                                    relayWriteWrapper(&relay_map[RELAY_num[i]-1], false);
+                                    printReply("Received RELAY:OFF command");
+                                }
+                            }
+                            else
+                            {
+                                printReply("ERROR: unknown RELAY command");
+                                is_err = true;
+                            }
+                            
+                            //check for duration
+                            int duration = atoi(&cmd_str[delim_idx[5]+1]);
+                            
+                            if ( (duration >= 1) && (duration <= 5) ) // only supports duration 1-5
+                            {
+                                //delay following the specified duration
+                                delay(DURATION_MS[duration-1]);
+                                
+                                //check for ON/OFF
+                                if ( (!is_err) && (cmd_str[delim_idx[4]+1] == ON_CHAR) )
+                                {
+                                    //loop through all RELAY numbers to OFF - inverse control
+                                    for (int i = 0; i < total_relays; i++)
+                                    {
+                                        relayWriteWrapper(&relay_map[RELAY_num[i]-1], false);
+                                        printReply("Received RELAY:OFF command");
+                                    }
+                                }
+                                else if ( (!is_err) && (cmd_str[delim_idx[4]+1] == OFF_CHAR) )
+                                {
+                                    //loop through all RELAY numbers to ON - inverse control
+                                    for (int i = 0; i < total_relays; i++)
+                                    {
+                                        relayWriteWrapper(&relay_map[RELAY_num[i]-1], true);
+                                        printReply("Received RELAY:ON command");
+                                    }
+                                }
+                                else
+                                {
+                                    printReply("ERROR: unknown RELAY command");
+                                    is_err = true;
+                                }
+                            }
+                            else if (duration != 0) // skip if 0 - no delay/indefinite
+                            {
+                                printReply("ERROR: unknown RELAY command");
+                                is_err = true;
+                            }
+                            
+                            if (!is_err)
+                            {
+                                printReply("Completed 4xRELAY command");
+                            }
+                        }
                     }
-                    
-                    //reset index and clear buffer when done processing
-                    resetBuffer();
-                    cmd_idx = -1;
                 }
+                else
+                {
+                    printReply("ERROR: unknown RELAY request");
+                }
+                
+                //reset index and clear buffer when done processing
+                resetBuffer();
+                cmd_idx = -1;
             }
     
             cmd_idx++;
             
             if (cmd_idx >= MAX_BUFFERED_CMD) //buffer overflowing!
             {
-                Serial.println("ERROR: command buffer overflowing");
+                printReply("ERROR: command buffer overflowing");
                 resetBuffer();
                 cmd_idx = 0;
             }
