@@ -9,7 +9,7 @@
 
 #define NOP __asm__("nop\n\t") //"nop" executes in one machine cycle (at 16 MHz) yielding a 62.5 ns delay
 
-#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
+//#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
 
 #define USE_SPI // uncomment to use as SPI slave
 //#define DEBUG // uncomment this line to print debug data to the serial bus
@@ -21,6 +21,11 @@ const char * app_ver = "v3.0";
 const char END_CHAR = 'E';
 const char RELAY_CHAR = 'R';
 const char RESET_CHAR = 'X';
+const char RELAYGRP_CHAR = 'Q';
+const char GRPA_CHAR = 'A';
+const char GRPB_CHAR = 'B';
+const char GRPC_CHAR = 'C';
+const char GRPD_CHAR = 'D';
 const char ON_CHAR = '1';
 const char OFF_CHAR = '0';
 const char DELIM = ',';
@@ -52,6 +57,13 @@ typedef struct _relay_map_t
     byte muxNum;
     byte pinNum;
 }relay_map_t;
+
+typedef struct _relay_port_map_t
+{
+    DTIOI2CtoParallelConverter* ioExpPtr;
+    byte muxNum;
+    byte portNum;
+}relay_port_map_t;
 
 PCA9540BD multiplexer_U1; //PCA9540BD Mux (0x70)
 #ifdef USE_SPI
@@ -212,6 +224,27 @@ relay_map_t relay_map[128] = {
     {&ioExp1_U6, 1, 15}
 };
 
+relay_port_map_t relay_port_map[16] = {
+    //multiplex channel 0
+    {&ioExp0_U3, 0, 0}, //Group B - 0
+    {&ioExp0_U3, 0, 1}, //Group B - 1
+    {&ioExp0_U4, 0, 0}, //Group B - 2
+    {&ioExp0_U4, 0, 1}, //Group B - 3
+    {&ioExp0_U5, 0, 0}, //Group D - 4
+    {&ioExp0_U5, 0, 1}, //Group D - 5
+    {&ioExp0_U6, 0, 0}, //Group D - 6
+    {&ioExp0_U6, 0, 1}, //Group D - 7
+    //multiplex channel 1
+    {&ioExp1_U3, 1, 0}, //Group A - 8
+    {&ioExp1_U3, 1, 1}, //Group A - 9
+    {&ioExp1_U4, 1, 0}, //Group A - 10
+    {&ioExp1_U4, 1, 1}, //Group A - 11
+    {&ioExp1_U5, 1, 0}, //Group C - 12
+    {&ioExp1_U5, 1, 1}, //Group C - 13
+    {&ioExp1_U6, 1, 0}, //Group C - 14
+    {&ioExp1_U6, 1, 1} //Group C - 15
+};
+
 #ifdef VERBOSE_REPLY
 void printReply(const char * reply)
 {
@@ -234,6 +267,25 @@ void relayWriteWrapper(relay_map_t *p_relay, bool state)
         else
         {
             p_relay->ioExpPtr->digitalWrite1(p_relay->pinNum-8, state);
+        }
+    }
+
+    digitalWrite(STATUS_LED_PIN, LOW);
+}
+
+void relayWritePortWrapper(relay_port_map_t *p_relay, bool state)
+{
+    if (NULL != p_relay)
+    {
+        multiplexer_U1.selectChannel(p_relay->muxNum);
+        
+        if (p_relay->portNum == 0)
+        {
+            p_relay->ioExpPtr->digitalWritePort0(state);
+        }
+        else //portNum == 1
+        {
+            p_relay->ioExpPtr->digitalWritePort1(state);
         }
     }
 
@@ -359,7 +411,7 @@ void loop() {
         //sanitize and remove unwanted characters (ctrl/special char and SPACE)
         if (('!' <= tmp_char) && (tmp_char <= '~'))
         {
-            if (tmp_char == RELAY_CHAR)
+            if ( (tmp_char == RELAY_CHAR) || (tmp_char == RELAYGRP_CHAR) )
             {
                 //when detected start, reset index and clear buffer
                 cmd_idx = 0;
@@ -384,7 +436,49 @@ void loop() {
                 (cmd_str[delim_idx[delim_count-1]+1] == END_CHAR) )
             {
                 //parse first data for request type
-                if (cmd_str[0] == RELAY_CHAR)
+                if (cmd_str[0] == RELAYGRP_CHAR)
+                {
+                    //check for ON/OFF
+                    bool state = (cmd_str[delim_idx[1]+1] == ON_CHAR) ? true : false;
+
+                    if (cmd_str[delim_idx[0]+1] == GRPA_CHAR)
+                    {
+                        relayWritePortWrapper(&relay_port_map[8], state);
+                        relayWritePortWrapper(&relay_port_map[9], state);
+                        relayWritePortWrapper(&relay_port_map[10], state);
+                        relayWritePortWrapper(&relay_port_map[11], state);
+                        printReply("Received RELAY GROUP A command");
+                    }
+                    else if (cmd_str[delim_idx[0]+1] == GRPB_CHAR)
+                    {
+                        relayWritePortWrapper(&relay_port_map[0], state);
+                        relayWritePortWrapper(&relay_port_map[1], state);
+                        relayWritePortWrapper(&relay_port_map[2], state);
+                        relayWritePortWrapper(&relay_port_map[3], state);
+                        printReply("Received RELAY GROUP B command");
+                    }
+                    else if (cmd_str[delim_idx[0]+1] == GRPC_CHAR)
+                    {
+                        relayWritePortWrapper(&relay_port_map[12], state);
+                        relayWritePortWrapper(&relay_port_map[13], state);
+                        relayWritePortWrapper(&relay_port_map[14], state);
+                        relayWritePortWrapper(&relay_port_map[15], state);
+                        printReply("Received RELAY GROUP C command");
+                    }
+                    else if (cmd_str[delim_idx[0]+1] == GRPD_CHAR)
+                    {
+                        relayWritePortWrapper(&relay_port_map[4], state);
+                        relayWritePortWrapper(&relay_port_map[5], state);
+                        relayWritePortWrapper(&relay_port_map[6], state);
+                        relayWritePortWrapper(&relay_port_map[7], state);
+                        printReply("Received RELAY GROUP D command");
+                    }
+                    else
+                    {
+                        printReply("ERROR: unknown RELAYGRP command");
+                    }
+                }
+                else if (cmd_str[0] == RELAY_CHAR)
                 {
                     if (cmd_str[delim_idx[0]+1] == RESET_CHAR)
                     {
@@ -392,18 +486,18 @@ void loop() {
                         if (cmd_str[delim_idx[1]+1] == ON_CHAR)
                         {
                             printReply("Received RELAY X ON command. Please wait...");
-                            for (int i = 0; i < 128; i++)
+                            for (int i = 0; i < 16; i++)
                             {
-                                relayWriteWrapper(&relay_map[i], true);
+                                relayWritePortWrapper(&relay_port_map[i], true);
                             }
                             printReply("RELAY X ON command done.");
                         }
                         else if (cmd_str[delim_idx[1]+1] == OFF_CHAR)
                         {
                             printReply("Received RELAY X OFF command. Please wait...");
-                            for (int i = 0; i < 128; i++)
+                            for (int i = 0; i < 16; i++)
                             {
-                                relayWriteWrapper(&relay_map[i], false);
+                                relayWritePortWrapper(&relay_port_map[i], false);
                             }
                             printReply("RELAY X OFF command done.");
                         }
