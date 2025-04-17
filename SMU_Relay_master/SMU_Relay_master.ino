@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 3.1 (13/4/2025)
+// Rev 3.2 (17/4/2025)
 // - Maxtrax
 
 #include <Wire.h>
@@ -14,8 +14,8 @@
 //#define MASTER_TEST //uncomment to perform relay test loop on master board
 //#define SLAVE_TEST //uncomment to perform relay test loop on slave board
 
-//#define SPI_TRANSFER_BUFFER //for buffer transfer instead of byte by byte
-#define SPI_2X_HACK_GRPCMD //for sending 2x commands to slave (same as previous)
+#define SPI_TRANSFER_BUFFER //for buffer transfer instead of byte by byte
+//#define SPI_2X_HACK_GRPCMD //for sending 2x commands to slave (same as previous)
 
 //----------------------------------------------
 // update the below configurations for loop test
@@ -37,7 +37,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_100K
 
-const char * app_ver = "v3.1";
+const char * app_ver = "v3.2";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";

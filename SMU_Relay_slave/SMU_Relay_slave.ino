@@ -1,5 +1,5 @@
 // SMU Relay (Slave)
-// Rev 3.1 (13/4/2025)
+// Rev 3.2 (17/4/2025)
 // - Maxtrax
 
 #include <Wire.h>
@@ -9,14 +9,14 @@
 
 #define NOP __asm__("nop\n\t") //"nop" executes in one machine cycle (at 16 MHz) yielding a 62.5 ns delay
 
-#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
+//#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
 
 #define USE_SPI // uncomment to use as SPI slave
 //#define DEBUG // uncomment this line to print debug data to the serial bus
 #define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
 //#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
 
-const char * app_ver = "v3.1";
+const char * app_ver = "v3.2";
 
 const char END_CHAR = 'E';
 const char RELAY_CHAR = 'R';
