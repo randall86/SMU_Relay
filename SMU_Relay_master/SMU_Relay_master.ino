@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 3.0 (06/12/2024)
+// Rev 3.1 (13/4/2025)
 // - Maxtrax
 
 #include <Wire.h>
@@ -7,14 +7,14 @@
 #include <PCA9540BD.h>
 #include <DTIOI2CtoParallelConverter.h>
 
-//#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
+#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
 
 //define DEBUG //uncomment this line to print debug data to the serial bus
 //#define RUN_RELAY_TEST //uncomment to perform relay test loop
 //#define MASTER_TEST //uncomment to perform relay test loop on master board
 //#define SLAVE_TEST //uncomment to perform relay test loop on slave board
 
-#define SPI_TRANSFER_BUFFER //for buffer transfer instead of byte by byte
+//#define SPI_TRANSFER_BUFFER //for buffer transfer instead of byte by byte
 #define SPI_2X_HACK_GRPCMD //for sending 2x commands to slave (same as previous)
 
 //----------------------------------------------
@@ -37,7 +37,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_100K
 
-const char * app_ver = "v3.0";
+const char * app_ver = "v3.1";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
