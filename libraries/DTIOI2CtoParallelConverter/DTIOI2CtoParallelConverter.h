@@ -73,6 +73,8 @@ class DTIOI2CtoParallelConverter
 
 	private :
 		int _SlaveAddress;
+        byte _CachePort0;
+        byte _CachePort1;
 };
 
 #endif

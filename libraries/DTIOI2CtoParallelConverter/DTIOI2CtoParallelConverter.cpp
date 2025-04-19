@@ -3,6 +3,8 @@
 DTIOI2CtoParallelConverter::DTIOI2CtoParallelConverter(byte SlaveAddress)
 {
 	_SlaveAddress = SlaveAddress;
+    _CachePort0 = 0x00;
+    _CachePort1 = 0x00;
 }
 
 
@@ -95,20 +97,22 @@ bool DTIOI2CtoParallelConverter::portMode1(byte value)
 
 bool DTIOI2CtoParallelConverter::digitalWrite0(byte pinNumber, bool state)
 {
+    // From datasheet: reads from this register reflect the value that is in the 
+    // flip-flop controlling the output selection, not the actual pin value.
 	byte oldValue = OUTPUTPORT0;
 	if(this->twiRead(oldValue) && pinNumber <= 7)
 	{
 		if(state)
 		{
-			oldValue |= (1 << pinNumber);
-			if(this->digitalWritePort0(oldValue))
+			_CachePort0 |= (1 << pinNumber);
+			if(this->digitalWritePort0(_CachePort0))
 				return true;
 			return false;
 		}
 		else if(!state)
 		{
-			oldValue &= ~(1 << pinNumber);
-			if(this->digitalWritePort0(oldValue))
+			_CachePort0 &= ~(1 << pinNumber);
+			if(this->digitalWritePort0(_CachePort0))
 				return true;
 			return false;
 		}
@@ -118,20 +122,22 @@ bool DTIOI2CtoParallelConverter::digitalWrite0(byte pinNumber, bool state)
 
 bool DTIOI2CtoParallelConverter::digitalWrite1(byte pinNumber, bool state)
 {
+    // From datasheet: reads from this register reflect the value that is in the 
+    // flip-flop controlling the output selection, not the actual pin value.
 	byte oldValue = OUTPUTPORT1;
 	if(this->twiRead(oldValue) && pinNumber <= 7)
 	{
 		if(state)
 		{
-			oldValue |= (1 << pinNumber);
-			if(this->digitalWritePort1(oldValue))
+			_CachePort1 |= (1 << pinNumber);
+			if(this->digitalWritePort1(_CachePort1))
 				return true;
 			return false;
 		}
 		else if(!state)
 		{
-			oldValue &= ~(1 << pinNumber);
-			if(this->digitalWritePort1(oldValue))
+			_CachePort1 &= ~(1 << pinNumber);
+			if(this->digitalWritePort1(_CachePort1))
 				return true;
 			return false;
 		}
@@ -142,14 +148,20 @@ bool DTIOI2CtoParallelConverter::digitalWrite1(byte pinNumber, bool state)
 bool DTIOI2CtoParallelConverter::digitalWritePort0(byte value)
 {
 	if(this->twiWrite(OUTPUTPORT0, value))
+    {
+        _CachePort0 = value;
 		return true;
+    }
 	return false;
 }
 
 bool DTIOI2CtoParallelConverter::digitalWritePort1(byte value)
 {
 	if(this->twiWrite(OUTPUTPORT1, value))
+    {
+        _CachePort1 = value;
 		return true;
+    }
 	return false;
 }
 
