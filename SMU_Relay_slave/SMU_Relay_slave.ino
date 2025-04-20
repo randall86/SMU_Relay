@@ -1,5 +1,5 @@
 // SMU Relay (Slave)
-// Rev 3.2 (17/4/2025)
+// Rev 3.4 (20/4/2025)
 // - Maxtrax
 
 #include <Wire.h>
@@ -16,7 +16,7 @@
 #define INTERRUPT2BUFFER // uncomment this line to copy the data received in the Data Received Complete interrupt to a buffer to be used in the main loop
 //#define INTERRUPT2SERIAL // uncomment this line to print the data to the serial bus whenever the Data Received Complete interrupt is triggered
 
-const char * app_ver = "v3.2";
+const char * app_ver = "v3.4";
 
 const char END_CHAR = 'E';
 const char RELAY_CHAR = 'R';

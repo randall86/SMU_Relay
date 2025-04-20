@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 3.2 (17/4/2025)
+// Rev 3.4 (20/4/2025)
 // - Maxtrax
 
 #include <Wire.h>
@@ -7,7 +7,7 @@
 #include <PCA9540BD.h>
 #include <DTIOI2CtoParallelConverter.h>
 
-#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
+//#define VERBOSE_REPLY //uncomment this for replying ACK/NACK/Debug logging
 
 //define DEBUG //uncomment this line to print debug data to the serial bus
 //#define RUN_RELAY_TEST //uncomment to perform relay test loop
@@ -15,7 +15,6 @@
 //#define SLAVE_TEST //uncomment to perform relay test loop on slave board
 
 #define SPI_TRANSFER_BUFFER //for buffer transfer instead of byte by byte
-//#define SPI_2X_HACK_GRPCMD //for sending 2x commands to slave (same as previous)
 
 //----------------------------------------------
 // update the below configurations for loop test
@@ -37,7 +36,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_100K
 
-const char * app_ver = "v3.2";
+const char * app_ver = "v3.4";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -324,34 +323,28 @@ void loop() {
 
                         for (byte slot = 0; slot < MAX_SLAVE_BOARD; slot++)
                         {
-                        #ifdef SPI_2X_HACK_GRPCMD
-                            //--------------------------------------------------
-                            //HACK HACK HACK - send every command to slave twice
-                            //--------------------------------------------------
-                            for (byte j = 0; j < 2; j++)
+                            digitalWrite(SPI_CS_PINS[slot], LOW);
+                            delay(100);
+
+                            //start sending to SPI lines begining of RELAY request type
+                        #ifdef SPI_TRANSFER_BUFFER
+                            char xfer_cmd[MAX_BUFFERED_CMD] = {};
+                            int start = delim_idx[1]+1;
+                            int end = cmd_idx-start+1;
+
+                            memcpy(xfer_cmd, &cmd_str[start], end);
+                            SPI.transfer(xfer_cmd, end);
+                        #else
+                            for (int i = delim_idx[1]+1; i <= cmd_idx; i++)
                             {
-                        #endif
-                                digitalWrite(SPI_CS_PINS[slot], LOW);
-                                delay(100);
-
-                                //start sending to SPI lines begining of RELAY request type
-                            #ifdef SPI_TRANSFER_BUFFER
-                                int start = delim_idx[1]+1;
-                                int end = cmd_idx-start+1;
-                                SPI.transfer(&cmd_str[start], end);
-                            #else
-                                for (int i = delim_idx[1]+1; i <= cmd_idx; i++)
-                                {
-                                    SPI.transfer(cmd_str[i]);
-                                    delayMicroseconds(1000); // play with this parameter
-                                }
-                            #endif
-
-                                delay(100);
-                                digitalWrite(SPI_CS_PINS[slot], HIGH);
-                        #ifdef SPI_2X_HACK_GRPCMD
+                                SPI.transfer(cmd_str[i]);
+                                delayMicroseconds(1000); // play with this parameter
                             }
                         #endif
+
+                            digitalWrite(SPI_CS_PINS[slot], HIGH);
+                            delay(100);
+
                             printReply(ACK_STR);
                         }
                     }
@@ -362,34 +355,28 @@ void loop() {
 
                         if ( (SLOT_num >= 1) && (SLOT_num <= 8) ) //SLOT 1-8 are external relays
                         {
-                        #ifdef SPI_2X_HACK_GRPCMD
-                            //--------------------------------------------------
-                            //HACK HACK HACK - send every command to slave twice
-                            //--------------------------------------------------
-                            for (byte j = 0; j < 2; j++)
+                            digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
+                            delay(100);
+
+                            //start sending to SPI lines begining of RELAY request type
+                        #ifdef SPI_TRANSFER_BUFFER
+                            char xfer_cmd[MAX_BUFFERED_CMD] = {};
+                            int start = delim_idx[1]+1;
+                            int end = cmd_idx-start+1;
+
+                            memcpy(xfer_cmd, &cmd_str[start], end);
+                            SPI.transfer(xfer_cmd, end);
+                        #else
+                            for (int i = delim_idx[1]+1; i <= cmd_idx; i++)
                             {
-                        #endif
-                                digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
-                                delay(100);
-
-                                //start sending to SPI lines begining of RELAY request type
-                            #ifdef SPI_TRANSFER_BUFFER
-                                int start = delim_idx[1]+1;
-                                int end = cmd_idx-start+1;
-                                SPI.transfer(&cmd_str[start], end);
-                            #else
-                                for (int i = delim_idx[1]+1; i <= cmd_idx; i++)
-                                {
-                                    SPI.transfer(cmd_str[i]);
-                                    delayMicroseconds(1000); // play with this parameter
-                                }
-                            #endif
-
-                                delay(100);
-                                digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
-                        #ifdef SPI_2X_HACK_GRPCMD
+                                SPI.transfer(cmd_str[i]);
+                                delayMicroseconds(1000); // play with this parameter
                             }
                         #endif
+
+                            digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
+                            delay(100);
+
                             printReply(ACK_STR);
                         }
                         else if (SLOT_num == 0) //SLOT 0 is for local relay
