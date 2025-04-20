@@ -324,7 +324,7 @@ void loop() {
                         for (byte slot = 0; slot < MAX_SLAVE_BOARD; slot++)
                         {
                             digitalWrite(SPI_CS_PINS[slot], LOW);
-                            delay(100);
+                            delay(1);
 
                             //start sending to SPI lines begining of RELAY request type
                         #ifdef SPI_TRANSFER_BUFFER
@@ -343,7 +343,7 @@ void loop() {
                         #endif
 
                             digitalWrite(SPI_CS_PINS[slot], HIGH);
-                            delay(100);
+                            delay(1);
 
                             printReply(ACK_STR);
                         }
@@ -356,7 +356,7 @@ void loop() {
                         if ( (SLOT_num >= 1) && (SLOT_num <= 8) ) //SLOT 1-8 are external relays
                         {
                             digitalWrite(SPI_CS_PINS[SLOT_num-1], LOW);
-                            delay(100);
+                            delay(1);
 
                             //start sending to SPI lines begining of RELAY request type
                         #ifdef SPI_TRANSFER_BUFFER
@@ -375,7 +375,7 @@ void loop() {
                         #endif
 
                             digitalWrite(SPI_CS_PINS[SLOT_num-1], HIGH);
-                            delay(100);
+                            delay(1);
 
                             printReply(ACK_STR);
                         }
