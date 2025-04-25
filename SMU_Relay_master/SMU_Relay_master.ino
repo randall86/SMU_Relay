@@ -1,5 +1,5 @@
 // SMU Relay (Master)
-// Rev 3.4 (20/4/2025)
+// Rev 3.5 (25/4/2025)
 // - Maxtrax
 
 #include <Wire.h>
@@ -36,7 +36,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_100K
 
-const char * app_ver = "v3.4";
+const char * app_ver = "v3.5";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -45,6 +45,8 @@ const char END_CHAR = 'E';
 const char RELAY_CHAR = 'R';
 const char RESET_CHAR = 'X';
 const char FRESET_CHAR = 'F';
+const char RELAYGRP1_CHAR = 'P';
+const char RELAYGRP2_CHAR = 'R';
 const char RELAYGRP_CHAR = 'Q';
 const char ON_CHAR = '1';
 const char OFF_CHAR = '0';
@@ -316,12 +318,16 @@ void loop() {
                 //parse first data for request type
                 if (cmd_str[0] == SLOT_CHAR)
                 {
-                    if (cmd_str[delim_idx[0]+1] == RELAYGRP_CHAR)
+                    if ( (cmd_str[delim_idx[0]+1] == RELAYGRP_CHAR) || //for group commands
+                        (cmd_str[delim_idx[0]+1] == RELAYGRP1_CHAR) || (cmd_str[delim_idx[0]+1] == RELAYGRP2_CHAR) )
                     {
+                        byte start = (cmd_str[delim_idx[0]+1] == RELAYGRP2_CHAR) ? (MAX_SLAVE_BOARD/2) : 0;
+                        byte end = (cmd_str[delim_idx[0]+1] == RELAYGRP1_CHAR) ? (MAX_SLAVE_BOARD/2) : MAX_SLAVE_BOARD;
+
                         //replace R with Q for RELAYGRP first byte
                         cmd_str[delim_idx[1]+1] = RELAYGRP_CHAR;
 
-                        for (byte slot = 0; slot < MAX_SLAVE_BOARD; slot++)
+                        for (byte slot = start; slot < end; slot++)
                         {
                             digitalWrite(SPI_CS_PINS[slot], LOW);
                             delay(1);
