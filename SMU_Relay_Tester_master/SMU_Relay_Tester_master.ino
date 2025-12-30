@@ -98,6 +98,12 @@ Countimer debounceTimerSw4;
 Countimer debounceTimerSw5;
 Countimer debounceTimerSw6;
 
+bool is_Sw2_read = false;
+bool is_Sw3_read = false;
+bool is_Sw4_read = false;
+bool is_Sw5_read = false;
+bool is_Sw6_read = false;
+
 #ifdef VERBOSE_REPLY
 void printReply(const char * reply)
 {
@@ -182,6 +188,8 @@ void debounceSw2Routine()
 
             digitalWrite(SPI_CS1_PIN, HIGH);
             delay(1);
+
+            is_Sw2_read = false;
         }
     }
 }
@@ -222,6 +230,8 @@ void debounceSw3Routine()
 
             digitalWrite(SPI_CS1_PIN, HIGH);
             delay(1);
+
+            is_Sw3_read = false;
         } 
     }
 }
@@ -262,6 +272,8 @@ void debounceSw4Routine()
 
             digitalWrite(SPI_CS1_PIN, HIGH);
             delay(1);
+
+            is_Sw4_read = false;
         }
     }
 }
@@ -295,6 +307,8 @@ void debounceSw5Routine()
 
             digitalWrite(SPI_CS1_PIN, HIGH);
             delay(1);
+
+            is_Sw5_read = false;
         }
     }
 }
@@ -315,6 +329,8 @@ void debounceSw6Routine()
             digitalWrite(SLAVE_RESET_PIN, HIGH);
             delay(500); //500ms for slaves to reset
             digitalWrite(SLAVE_RESET_PIN, LOW);
+
+            is_Sw6_read = false;
         }
     }
 }
@@ -336,29 +352,34 @@ void debounceTimerTick()
     debounceTimerSw6.run();
 
     // read the state of the button value
-    if (digitalRead(SW2_PIN))
+    if (digitalRead(SW2_PIN) && !is_Sw2_read)
     {
         debounceTimerSw2.start();
+        is_Sw2_read = true;
     }
     
-    if (digitalRead(SW3_PIN))
+    if (digitalRead(SW3_PIN) && !is_Sw3_read)
     {
         debounceTimerSw3.start();
+        is_Sw2_read = true;
     }
     
-    if (digitalRead(SW4_PIN))
+    if (digitalRead(SW4_PIN) && !is_Sw4_read)
     {
         debounceTimerSw4.start();
+        is_Sw4_read = true;
     }
     
-    if (digitalRead(SW5_PIN))
+    if (digitalRead(SW5_PIN) && !is_Sw5_read)
     {
         debounceTimerSw5.start();
+        is_Sw5_read = true;
     }
     
-    if (digitalRead(SW6_PIN))
+    if (digitalRead(SW6_PIN) && !is_Sw6_read)
     {
         debounceTimerSw6.start();
+        is_Sw6_read = true;
     }
 
     yield(); //yield to pass control to other tasks
