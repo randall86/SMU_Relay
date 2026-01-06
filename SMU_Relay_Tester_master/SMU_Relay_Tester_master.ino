@@ -344,13 +344,6 @@ void resetBuffer()
 
 void debounceTimerTick()
 {
-    // tick the debounce timer
-    debounceTimerSw2.run();
-    debounceTimerSw3.run();
-    debounceTimerSw4.run();
-    debounceTimerSw5.run();
-    debounceTimerSw6.run();
-
     // read the state of the button value
     if (digitalRead(SW2_PIN) && !is_Sw2_read)
     {
@@ -425,10 +418,17 @@ void setup() {
     debounceTimerSw4.setInterval(debounceSw4Routine, CHECK_MSEC);
     debounceTimerSw5.setInterval(debounceSw5Routine, CHECK_MSEC);
     debounceTimerSw6.setInterval(debounceSw6Routine, CHECK_MSEC);
-    Scheduler.startLoop(debounceTimerTick); //check switch state from interrupt
+    Scheduler.startLoop(debounceTimerTick); //check switch state from button press
 }
 
 void loop() {
+    // tick the debounce timer
+    debounceTimerSw2.run();
+    debounceTimerSw3.run();
+    debounceTimerSw4.run();
+    debounceTimerSw5.run();
+    debounceTimerSw6.run();
+
     // put your main code here, to run repeatedly:
     if (Serial.available())
     {
