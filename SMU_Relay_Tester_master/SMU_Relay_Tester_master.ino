@@ -58,8 +58,8 @@ const int MAX_BUFFERED_CMD = 64;
 const int MAX_DELIMS = 16;
 const byte MAX_EXT_RELAYS = 4;
 
-const uint32_t DEBOUNCE_MSEC = 300; //stable time before registering state change
-const uint32_t CHECK_MSEC = 100; //read switch every 100ms when detected state change
+const uint32_t DEBOUNCE_MSEC = 100; //stable time before registering state change
+const uint32_t CHECK_MSEC = 50; //read switch every 50ms when detected state change
 
 //supported on/off durations in ms
 const int DURATION_MS[5] = {
@@ -170,6 +170,7 @@ void debounceSw2Routine()
         debounceTimerSw2.stop();
         if(switch_state) // send on all relays 1-128 - R,X,1,E
         {
+            Serial.println("Triggering SW2 button on");
             turnOnAllExtRelays();
 
             digitalWrite(SPI_CS1_PIN, LOW);
@@ -205,6 +206,7 @@ void debounceSw3Routine()
         debounceTimerSw3.stop();
         if(switch_state) // send on all relays 65-128 (group A and C) - Q,A,1,E and Q,C,1,E
         {
+            Serial.println("Triggering SW3 button on");
             turnOnAllExtRelays();
 
             digitalWrite(SPI_CS1_PIN, LOW);
@@ -247,6 +249,7 @@ void debounceSw4Routine()
         debounceTimerSw4.stop();
         if(switch_state) // send on all relays 1-64 (group B and D) - Q,B,1,E and Q,D,1,E
         {
+            Serial.println("Triggering SW4 button on");
             turnOnAllExtRelays();
 
             digitalWrite(SPI_CS1_PIN, LOW);
@@ -289,6 +292,7 @@ void debounceSw5Routine()
         debounceTimerSw5.stop();
         if(switch_state) // send on relays 1-128 in sequence - R,X,X,E
         {
+            Serial.println("Triggering SW5 button on");
             turnOnAllExtRelays();
 
             digitalWrite(SPI_CS1_PIN, LOW);
@@ -324,6 +328,7 @@ void debounceSw6Routine()
         debounceTimerSw6.stop();
         if(switch_state) // hard reset on relay board same as S,0,R,X,F,E
         {
+            Serial.println("Triggering SW6 button on");
             turnOffAllExtRelays();
 
             digitalWrite(SLAVE_RESET_PIN, HIGH);
@@ -347,30 +352,35 @@ void debounceTimerTick()
     // read the state of the button value
     if (digitalRead(SW2_PIN) && !is_Sw2_read)
     {
+        Serial.println("SW2 button press detected! Start debouncing...");
         debounceTimerSw2.start();
         is_Sw2_read = true;
     }
     
     if (digitalRead(SW3_PIN) && !is_Sw3_read)
     {
+        Serial.println("SW3 button press detected! Start debouncing...");
         debounceTimerSw3.start();
         is_Sw2_read = true;
     }
     
     if (digitalRead(SW4_PIN) && !is_Sw4_read)
     {
+        Serial.println("SW4 button press detected! Start debouncing...");
         debounceTimerSw4.start();
         is_Sw4_read = true;
     }
     
     if (digitalRead(SW5_PIN) && !is_Sw5_read)
     {
+        Serial.println("SW5 button press detected! Start debouncing...");
         debounceTimerSw5.start();
         is_Sw5_read = true;
     }
     
     if (digitalRead(SW6_PIN) && !is_Sw6_read)
     {
+        Serial.println("SW6 button press detected! Start debouncing...");
         debounceTimerSw6.start();
         is_Sw6_read = true;
     }
