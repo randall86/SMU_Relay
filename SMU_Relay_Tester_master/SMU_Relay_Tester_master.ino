@@ -1,9 +1,8 @@
 // SMU Relay Tester (Master)
-// Rev 1.0 (27/12/2025)
+// Rev 1.1 (08/01/2026)
 // - Maxtrax
 
-#include <Scheduler.h>
-#include <Countimer.h>
+#include <Bounce2.h>
 #include <Wire.h>
 #include <SPI.h>
 
@@ -22,7 +21,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_100K
 
-const char * app_ver = "v1.0";
+const char * app_ver = "v1.1";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -47,11 +46,11 @@ const byte EXT_RELAY_B = 3;
 const byte EXT_RELAY_C = 4;
 const byte EXT_RELAY_D = 5;
 
-const byte SW2_PIN = 17;
-const byte SW3_PIN = 18;
-const byte SW4_PIN = 19;
-const byte SW5_PIN = 20;
-const byte SW6_PIN = 21;
+const byte SW2_PIN = A2;
+const byte SW3_PIN = A3;
+const byte SW4_PIN = A4;
+const byte SW5_PIN = A5;
+const byte SW6_PIN = A6;
 
 const int MAX_BUFFERED_CMD = 64;
 
@@ -59,7 +58,6 @@ const int MAX_DELIMS = 16;
 const byte MAX_EXT_RELAYS = 4;
 
 const uint32_t DEBOUNCE_MSEC = 100; //stable time before registering state change
-const uint32_t CHECK_MSEC = 50; //read switch every 50ms when detected state change
 
 //supported on/off durations in ms
 const int DURATION_MS[5] = {
@@ -71,6 +69,12 @@ const int DURATION_MS[5] = {
 };
 
 SPISettings settings = SPISettings(SPI_TRANSFER_CLOCK_FREQ, MSBFIRST, SPI_MODE0);
+
+Bounce Sw2Debouncer = Bounce();
+Bounce Sw3Debouncer = Bounce();
+Bounce Sw4Debouncer = Bounce();
+Bounce Sw5Debouncer = Bounce();
+Bounce Sw6Debouncer = Bounce();
 
 int delim_count = 0;
 int delim_idx[MAX_DELIMS] = {};
@@ -91,19 +95,6 @@ byte EXT_RELAY_PINS[MAX_EXT_RELAYS] = {
     EXT_RELAY_D
 };
 
-//timer for start/stop switch debouncing
-Countimer debounceTimerSw2;
-Countimer debounceTimerSw3;
-Countimer debounceTimerSw4;
-Countimer debounceTimerSw5;
-Countimer debounceTimerSw6;
-
-bool is_Sw2_read = false;
-bool is_Sw3_read = false;
-bool is_Sw4_read = false;
-bool is_Sw5_read = false;
-bool is_Sw6_read = false;
-
 #ifdef VERBOSE_REPLY
 void printReply(const char * reply)
 {
@@ -112,36 +103,6 @@ void printReply(const char * reply)
 #else
 void printReply(const char * /*reply*/) {};
 #endif
-
-//returns true if state changed
-bool debounceSwitch(byte *state, byte pin, uint8_t *count)
-{
-    bool state_changed = false;
-
-    //read the switch from the HW
-    byte raw_state = digitalRead(pin);
-
-    if (raw_state == *state)
-    {
-        //set the timer which allows a change from current state.
-        *count = DEBOUNCE_MSEC/CHECK_MSEC;
-    }
-    else
-    {
-        //state has changed - wait for new state to become stable.
-        if (--*count == 0)
-        {
-            // Timer expired - accept the change.
-            *state = raw_state;
-            state_changed = true;
-
-            // And reset the timer.
-            *count = DEBOUNCE_MSEC/CHECK_MSEC;
-        }
-    }
-
-    return state_changed;
-}
 
 void turnOnAllExtRelays()
 {
@@ -159,185 +120,120 @@ void turnOffAllExtRelays()
     }
 }
 
-void debounceSw2Routine()
+void triggerSw2Routine()
 {
-    static byte switch_state = 0;
-    static uint8_t count = DEBOUNCE_MSEC/CHECK_MSEC;
-    
-    //if switch state changed, update the state
-    if(debounceSwitch(&switch_state, SW2_PIN, &count))
+    Serial.println("Triggering SW2 button on");
+    turnOnAllExtRelays();
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(on_all_relays_cmd, sizeof(on_all_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(on_all_relays_cmd); i++)
     {
-        debounceTimerSw2.stop();
-        if(switch_state) // send on all relays 1-128 - R,X,1,E
-        {
-            Serial.println("Triggering SW2 button on");
-            turnOnAllExtRelays();
-
-            digitalWrite(SPI_CS1_PIN, LOW);
-            delay(1);
-
-            //start sending to SPI lines begining of RELAY request type
-        #ifdef SPI_TRANSFER_BUFFER
-            SPI.transfer(on_all_relays_cmd, sizeof(on_all_relays_cmd));
-        #else
-            for (int i = 0; i < sizeof(on_all_relays_cmd); i++)
-            {
-                SPI.transfer(on_all_relays_cmd[i]);
-                delayMicroseconds(1000); // play with this parameter
-            }
-        #endif
-
-            digitalWrite(SPI_CS1_PIN, HIGH);
-            delay(1);
-
-            is_Sw2_read = false;
-        }
+        SPI.transfer(on_all_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
     }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
 }
 
-void debounceSw3Routine()
+void triggerSw3Routine()
 {
-    static byte switch_state = 0;
-    static uint8_t count = DEBOUNCE_MSEC/CHECK_MSEC;
-    
-    //if switch state changed, update the state
-    if(debounceSwitch(&switch_state, SW3_PIN, &count))
+    Serial.println("Triggering SW3 button on");
+    turnOnAllExtRelays();
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(on_grpA_relays_cmd, sizeof(on_grpA_relays_cmd));
+    SPI.transfer(on_grpC_relays_cmd, sizeof(on_grpC_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(on_grpA_relays_cmd); i++)
     {
-        debounceTimerSw3.stop();
-        if(switch_state) // send on all relays 65-128 (group A and C) - Q,A,1,E and Q,C,1,E
-        {
-            Serial.println("Triggering SW3 button on");
-            turnOnAllExtRelays();
-
-            digitalWrite(SPI_CS1_PIN, LOW);
-            delay(1);
-
-            //start sending to SPI lines begining of RELAY request type
-        #ifdef SPI_TRANSFER_BUFFER
-            SPI.transfer(on_grpA_relays_cmd, sizeof(on_grpA_relays_cmd));
-            SPI.transfer(on_grpC_relays_cmd, sizeof(on_grpC_relays_cmd));
-        #else
-            for (int i = 0; i < sizeof(on_grpA_relays_cmd); i++)
-            {
-                SPI.transfer(on_grpA_relays_cmd[i]);
-                delayMicroseconds(1000); // play with this parameter
-            }
-            
-            for (int i = 0; i < sizeof(on_grpC_relays_cmd); i++)
-            {
-                SPI.transfer(on_grpC_relays_cmd[i]);
-                delayMicroseconds(1000); // play with this parameter
-            }
-        #endif
-
-            digitalWrite(SPI_CS1_PIN, HIGH);
-            delay(1);
-
-            is_Sw3_read = false;
-        } 
+        SPI.transfer(on_grpA_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
     }
+    
+    for (int i = 0; i < sizeof(on_grpC_relays_cmd); i++)
+    {
+        SPI.transfer(on_grpC_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
+    }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
 }
 
-void debounceSw4Routine()
+void triggerSw4Routine()
 {
-    static byte switch_state = 0;
-    static uint8_t count = DEBOUNCE_MSEC/CHECK_MSEC;
-    
-    //if switch state changed, update the state
-    if(debounceSwitch(&switch_state, SW4_PIN, &count))
+    Serial.println("Triggering SW4 button on");
+    turnOnAllExtRelays();
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(on_grpB_relays_cmd, sizeof(on_grpB_relays_cmd));
+    SPI.transfer(on_grpD_relays_cmd, sizeof(on_grpD_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(on_grpB_relays_cmd); i++)
     {
-        debounceTimerSw4.stop();
-        if(switch_state) // send on all relays 1-64 (group B and D) - Q,B,1,E and Q,D,1,E
-        {
-            Serial.println("Triggering SW4 button on");
-            turnOnAllExtRelays();
-
-            digitalWrite(SPI_CS1_PIN, LOW);
-            delay(1);
-
-            //start sending to SPI lines begining of RELAY request type
-        #ifdef SPI_TRANSFER_BUFFER
-            SPI.transfer(on_grpB_relays_cmd, sizeof(on_grpB_relays_cmd));
-            SPI.transfer(on_grpD_relays_cmd, sizeof(on_grpD_relays_cmd));
-        #else
-            for (int i = 0; i < sizeof(on_grpB_relays_cmd); i++)
-            {
-                SPI.transfer(on_grpB_relays_cmd[i]);
-                delayMicroseconds(1000); // play with this parameter
-            }
-            
-            for (int i = 0; i < sizeof(on_grpD_relays_cmd); i++)
-            {
-                SPI.transfer(on_grpD_relays_cmd[i]);
-                delayMicroseconds(1000); // play with this parameter
-            }
-        #endif
-
-            digitalWrite(SPI_CS1_PIN, HIGH);
-            delay(1);
-
-            is_Sw4_read = false;
-        }
+        SPI.transfer(on_grpB_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
     }
+    
+    for (int i = 0; i < sizeof(on_grpD_relays_cmd); i++)
+    {
+        SPI.transfer(on_grpD_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
+    }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
 }
 
-void debounceSw5Routine()
+void triggerSw5Routine()
 {
-    static byte switch_state = 0;
-    static uint8_t count = DEBOUNCE_MSEC/CHECK_MSEC;
-    
-    //if switch state changed, update the state
-    if(debounceSwitch(&switch_state, SW5_PIN, &count))
+    Serial.println("Triggering SW5 button on");
+    turnOnAllExtRelays();
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(on_seq_relays_cmd, sizeof(on_seq_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(on_seq_relays_cmd); i++)
     {
-        debounceTimerSw5.stop();
-        if(switch_state) // send on relays 1-128 in sequence - R,X,X,E
-        {
-            Serial.println("Triggering SW5 button on");
-            turnOnAllExtRelays();
-
-            digitalWrite(SPI_CS1_PIN, LOW);
-            delay(1);
-
-            //start sending to SPI lines begining of RELAY request type
-        #ifdef SPI_TRANSFER_BUFFER
-            SPI.transfer(on_seq_relays_cmd, sizeof(on_seq_relays_cmd));
-        #else
-            for (int i = 0; i < sizeof(on_seq_relays_cmd); i++)
-            {
-                SPI.transfer(on_seq_relays_cmd[i]);
-                delayMicroseconds(1000); // play with this parameter
-            }
-        #endif
-
-            digitalWrite(SPI_CS1_PIN, HIGH);
-            delay(1);
-
-            is_Sw5_read = false;
-        }
+        SPI.transfer(on_seq_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
     }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
 }
 
-void debounceSw6Routine()
+void triggerSw6Routine()
 {
-    static byte switch_state = 0;
-    static uint8_t count = DEBOUNCE_MSEC/CHECK_MSEC;
+    Serial.println("Triggering SW6 button on");
+    turnOffAllExtRelays();
     
-    //if switch state changed, update the state
-    if(debounceSwitch(&switch_state, SW6_PIN, &count))
-    {
-        debounceTimerSw6.stop();
-        if(switch_state) // hard reset on relay board same as S,0,R,X,F,E
-        {
-            Serial.println("Triggering SW6 button on");
-            turnOffAllExtRelays();
-
-            digitalWrite(SLAVE_RESET_PIN, HIGH);
-            delay(500); //500ms for slaves to reset
-            digitalWrite(SLAVE_RESET_PIN, LOW);
-
-            is_Sw6_read = false;
-        }
-    }
+    digitalWrite(SLAVE_RESET_PIN, HIGH);
+    delay(500); //500ms for slaves to reset
+    digitalWrite(SLAVE_RESET_PIN, LOW);
 }
 
 void resetBuffer()
@@ -349,43 +245,50 @@ void resetBuffer()
 
 void debounceTimerTick()
 {
-    // read the state of the button value
-    if (digitalRead(SW2_PIN) && !is_Sw2_read)
-    {
-        Serial.println("SW2 button press detected! Start debouncing...");
-        debounceTimerSw2.start();
-        is_Sw2_read = true;
-    }
-    
-    if (digitalRead(SW3_PIN) && !is_Sw3_read)
-    {
-        Serial.println("SW3 button press detected! Start debouncing...");
-        debounceTimerSw3.start();
-        is_Sw2_read = true;
-    }
-    
-    if (digitalRead(SW4_PIN) && !is_Sw4_read)
-    {
-        Serial.println("SW4 button press detected! Start debouncing...");
-        debounceTimerSw4.start();
-        is_Sw4_read = true;
-    }
-    
-    if (digitalRead(SW5_PIN) && !is_Sw5_read)
-    {
-        Serial.println("SW5 button press detected! Start debouncing...");
-        debounceTimerSw5.start();
-        is_Sw5_read = true;
-    }
-    
-    if (digitalRead(SW6_PIN) && !is_Sw6_read)
-    {
-        Serial.println("SW6 button press detected! Start debouncing...");
-        debounceTimerSw6.start();
-        is_Sw6_read = true;
-    }
+    Sw2Debouncer.update();
+    Sw3Debouncer.update();
+    Sw4Debouncer.update();
+    Sw5Debouncer.update();
+    Sw6Debouncer.update();
+}
 
-    yield(); //yield to pass control to other tasks
+void checkSwState()
+{
+    if (Sw2Debouncer.changed())
+    {
+        if (Sw2Debouncer.read() == HIGH)
+        {
+            triggerSw2Routine();
+        }
+    }
+    else if (Sw3Debouncer.changed())
+    {
+        if (Sw3Debouncer.read() == HIGH)
+        {
+            triggerSw3Routine();
+        }
+    }
+    else if (Sw4Debouncer.changed())
+    {
+        if (Sw4Debouncer.read() == HIGH)
+        {
+            triggerSw4Routine();
+        }
+    }
+    else if (Sw5Debouncer.changed())
+    {
+        if (Sw5Debouncer.read() == HIGH)
+        {
+            triggerSw5Routine();
+        }
+    }
+    else if (Sw6Debouncer.changed())
+    {
+        if (Sw6Debouncer.read() == HIGH)
+        {
+            triggerSw6Routine();
+        }
+    }
 }
 
 void setup() {
@@ -408,11 +311,17 @@ void setup() {
         digitalWrite(EXT_RELAY_PINS[i], LOW);
     }
 
-    pinMode(SW2_PIN, INPUT);
-    pinMode(SW3_PIN, INPUT);
-    pinMode(SW4_PIN, INPUT);
-    pinMode(SW5_PIN, INPUT);
-    pinMode(SW6_PIN, INPUT);
+    Sw2Debouncer.attach(SW2_PIN, INPUT_PULLUP);
+    Sw3Debouncer.attach(SW3_PIN, INPUT_PULLUP);
+    Sw4Debouncer.attach(SW4_PIN, INPUT_PULLUP);
+    Sw5Debouncer.attach(SW5_PIN, INPUT_PULLUP);
+    Sw6Debouncer.attach(SW6_PIN, INPUT_PULLUP);
+
+    Sw2Debouncer.interval(DEBOUNCE_MSEC);
+    Sw3Debouncer.interval(DEBOUNCE_MSEC);
+    Sw4Debouncer.interval(DEBOUNCE_MSEC);
+    Sw5Debouncer.interval(DEBOUNCE_MSEC);
+    Sw6Debouncer.interval(DEBOUNCE_MSEC);
 
     //begin spi transaction here and not end it, as we're the only SPI user
     SPI.beginTransaction(settings);
@@ -422,22 +331,13 @@ void setup() {
     digitalWrite(SLAVE_RESET_PIN, HIGH);
     delay(500); //500ms for slaves to reset
     digitalWrite(SLAVE_RESET_PIN, LOW);
-
-    debounceTimerSw2.setInterval(debounceSw2Routine, CHECK_MSEC);
-    debounceTimerSw3.setInterval(debounceSw3Routine, CHECK_MSEC);
-    debounceTimerSw4.setInterval(debounceSw4Routine, CHECK_MSEC);
-    debounceTimerSw5.setInterval(debounceSw5Routine, CHECK_MSEC);
-    debounceTimerSw6.setInterval(debounceSw6Routine, CHECK_MSEC);
-    Scheduler.startLoop(debounceTimerTick); //check switch state from button press
 }
 
 void loop() {
-    // tick the debounce timer
-    debounceTimerSw2.run();
-    debounceTimerSw3.run();
-    debounceTimerSw4.run();
-    debounceTimerSw5.run();
-    debounceTimerSw6.run();
+    // Update the Bounce instance (YOU MUST DO THIS EVERY LOOP)
+    debounceTimerTick();
+
+    checkSwState();
 
     // put your main code here, to run repeatedly:
     if (Serial.available())
