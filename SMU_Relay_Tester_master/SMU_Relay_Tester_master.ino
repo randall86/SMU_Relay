@@ -1,5 +1,5 @@
 // SMU Relay Tester (Master)
-// Rev 1.1 (08/01/2026)
+// Rev 1.2 (09/01/2026)
 // - Maxtrax
 
 #include <Bounce2.h>
@@ -21,7 +21,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_100K
 
-const char * app_ver = "v1.1";
+const char * app_ver = "v1.2";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -81,12 +81,12 @@ int delim_idx[MAX_DELIMS] = {};
 int cmd_idx = 0;
 char cmd_str[MAX_BUFFERED_CMD] = {};
 
-char on_all_relays_cmd[] = {RELAY_CHAR, RESET_CHAR, '1', END_CHAR};
-char on_grpA_relays_cmd[] = {RELAYGRP_CHAR, 'A', '1', END_CHAR};
-char on_grpB_relays_cmd[] = {RELAYGRP_CHAR, 'B', '1', END_CHAR};
-char on_grpC_relays_cmd[] = {RELAYGRP_CHAR, 'C', '1', END_CHAR};
-char on_grpD_relays_cmd[] = {RELAYGRP_CHAR, 'D', '1', END_CHAR};
-char on_seq_relays_cmd[] = {RELAY_CHAR, RESET_CHAR, RESET_CHAR, END_CHAR};
+char on_all_relays_cmd[] = {RELAY_CHAR, RESET_CHAR, '1', END_CHAR, '\0'};
+char on_grpA_relays_cmd[] = {RELAYGRP_CHAR, 'A', '1', END_CHAR, '\0'};
+char on_grpB_relays_cmd[] = {RELAYGRP_CHAR, 'B', '1', END_CHAR, '\0'};
+char on_grpC_relays_cmd[] = {RELAYGRP_CHAR, 'C', '1', END_CHAR, '\0'};
+char on_grpD_relays_cmd[] = {RELAYGRP_CHAR, 'D', '1', END_CHAR, '\0'};
+char on_seq_relays_cmd[] = {RELAY_CHAR, RESET_CHAR, RESET_CHAR, END_CHAR, '\0'};
 
 byte EXT_RELAY_PINS[MAX_EXT_RELAYS] = {
     EXT_RELAY_A,
@@ -122,7 +122,7 @@ void turnOffAllExtRelays()
 
 void triggerSw2Routine()
 {
-    Serial.println("Triggering SW2 button on");
+    //Serial.println("Triggering SW2 button on");
     turnOnAllExtRelays();
 
     digitalWrite(SPI_CS1_PIN, LOW);
@@ -145,7 +145,7 @@ void triggerSw2Routine()
 
 void triggerSw3Routine()
 {
-    Serial.println("Triggering SW3 button on");
+    //Serial.println("Triggering SW3 button on");
     turnOnAllExtRelays();
 
     digitalWrite(SPI_CS1_PIN, LOW);
@@ -175,7 +175,7 @@ void triggerSw3Routine()
 
 void triggerSw4Routine()
 {
-    Serial.println("Triggering SW4 button on");
+    //Serial.println("Triggering SW4 button on");
     turnOnAllExtRelays();
 
     digitalWrite(SPI_CS1_PIN, LOW);
@@ -205,7 +205,7 @@ void triggerSw4Routine()
 
 void triggerSw5Routine()
 {
-    Serial.println("Triggering SW5 button on");
+    //Serial.println("Triggering SW5 button on");
     turnOnAllExtRelays();
 
     digitalWrite(SPI_CS1_PIN, LOW);
@@ -228,7 +228,7 @@ void triggerSw5Routine()
 
 void triggerSw6Routine()
 {
-    Serial.println("Triggering SW6 button on");
+    //Serial.println("Triggering SW6 button on");
     turnOffAllExtRelays();
     
     digitalWrite(SLAVE_RESET_PIN, HIGH);
