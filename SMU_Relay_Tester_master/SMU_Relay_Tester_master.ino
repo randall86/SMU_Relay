@@ -1,5 +1,5 @@
 // SMU Relay Tester (Master)
-// Rev 1.2 (09/01/2026)
+// Rev 2.0 (13/02/2026)
 // - Maxtrax
 
 #include <Bounce2.h>
@@ -21,7 +21,7 @@
 
 #define SPI_TRANSFER_CLOCK_FREQ SPI_TRANSFER_CLOCK_FREQ_100K
 
-const char * app_ver = "v1.2";
+const char * app_ver = "v2.0";
 
 const char * ACK_STR = "ACK";
 const char * NACK_STR = "NACK";
@@ -45,17 +45,21 @@ const byte EXT_RELAY_A = 2;
 const byte EXT_RELAY_B = 3;
 const byte EXT_RELAY_C = 4;
 const byte EXT_RELAY_D = 5;
+const byte GATE_A = 1;
+const byte GATE_B = 7;
+const byte GATE_C = 11;
+const byte GATE_D = 12;
 
 const byte SW2_PIN = A2;
 const byte SW3_PIN = A3;
 const byte SW4_PIN = A4;
 const byte SW5_PIN = A5;
 const byte SW6_PIN = A6;
+const byte SW7_PIN = A1;
 
 const int MAX_BUFFERED_CMD = 64;
 
 const int MAX_DELIMS = 16;
-const byte MAX_EXT_RELAYS = 4;
 
 const uint32_t DEBOUNCE_MSEC = 100; //stable time before registering state change
 
@@ -75,6 +79,7 @@ Bounce Sw3Debouncer = Bounce();
 Bounce Sw4Debouncer = Bounce();
 Bounce Sw5Debouncer = Bounce();
 Bounce Sw6Debouncer = Bounce();
+Bounce Sw7Debouncer = Bounce();
 
 int delim_count = 0;
 int delim_idx[MAX_DELIMS] = {};
@@ -86,13 +91,30 @@ char on_grpA_relays_cmd[] = {RELAYGRP_CHAR, 'A', '1', END_CHAR, '\0'};
 char on_grpB_relays_cmd[] = {RELAYGRP_CHAR, 'B', '1', END_CHAR, '\0'};
 char on_grpC_relays_cmd[] = {RELAYGRP_CHAR, 'C', '1', END_CHAR, '\0'};
 char on_grpD_relays_cmd[] = {RELAYGRP_CHAR, 'D', '1', END_CHAR, '\0'};
+char off_grpA_relays_cmd[] = {RELAYGRP_CHAR, 'A', '0', END_CHAR, '\0'};
+char off_grpB_relays_cmd[] = {RELAYGRP_CHAR, 'B', '0', END_CHAR, '\0'};
+char off_grpC_relays_cmd[] = {RELAYGRP_CHAR, 'C', '0', END_CHAR, '\0'};
+char off_grpD_relays_cmd[] = {RELAYGRP_CHAR, 'D', '0', END_CHAR, '\0'};
 char on_seq_relays_cmd[] = {RELAY_CHAR, RESET_CHAR, RESET_CHAR, END_CHAR, '\0'};
 
-byte EXT_RELAY_PINS[MAX_EXT_RELAYS] = {
+enum _EXT_RELAYS
+{
+    A_EXT_RELAYS = 0,
+    B_EXT_RELAYS,
+    C_EXT_RELAYS,
+    D_EXT_RELAYS,
+    MAX_EXT_RELAYS
+};
+
+byte EXT_RELAY_PINS[MAX_EXT_RELAYS+4] = {
     EXT_RELAY_A,
     EXT_RELAY_B,
     EXT_RELAY_C,
-    EXT_RELAY_D
+    EXT_RELAY_D,
+    GATE_A,
+    GATE_B,
+    GATE_C,
+    GATE_D
 };
 
 #ifdef VERBOSE_REPLY
@@ -109,6 +131,7 @@ void turnOnAllExtRelays()
     for (int i = 0; i < MAX_EXT_RELAYS; i++)
     {
         digitalWrite(EXT_RELAY_PINS[i], HIGH);
+        digitalWrite(EXT_RELAY_PINS[i+4], HIGH);
     }
 }
 
@@ -117,24 +140,50 @@ void turnOffAllExtRelays()
     for (int i = 0; i < MAX_EXT_RELAYS; i++)
     {
         digitalWrite(EXT_RELAY_PINS[i], LOW);
+        digitalWrite(EXT_RELAY_PINS[i+4], LOW);
     }
 }
 
 void triggerSw2Routine()
 {
     //Serial.println("Triggering SW2 button on");
-    turnOnAllExtRelays();
+    digitalWrite(EXT_RELAY_PINS[B_EXT_RELAYS], HIGH);
+    digitalWrite(EXT_RELAY_PINS[B_EXT_RELAYS+4], HIGH);
 
     digitalWrite(SPI_CS1_PIN, LOW);
     delay(1);
 
     //start sending to SPI lines begining of RELAY request type
 #ifdef SPI_TRANSFER_BUFFER
-    SPI.transfer(on_all_relays_cmd, sizeof(on_all_relays_cmd));
+    SPI.transfer(on_grpB_relays_cmd, sizeof(on_grpB_relays_cmd));
 #else
-    for (int i = 0; i < sizeof(on_all_relays_cmd); i++)
+    for (int i = 0; i < sizeof(on_grpB_relays_cmd); i++)
     {
-        SPI.transfer(on_all_relays_cmd[i]);
+        SPI.transfer(on_grpB_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
+    }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
+}
+
+void triggerSw2RoutineOff()
+{
+    //Serial.println("Triggering SW2 button on");
+    digitalWrite(EXT_RELAY_PINS[B_EXT_RELAYS], LOW);
+    digitalWrite(EXT_RELAY_PINS[B_EXT_RELAYS+4], LOW);
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(off_grpB_relays_cmd, sizeof(off_grpB_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(off_grpB_relays_cmd); i++)
+    {
+        SPI.transfer(off_grpB_relays_cmd[i]);
         delayMicroseconds(1000); // play with this parameter
     }
 #endif
@@ -146,52 +195,16 @@ void triggerSw2Routine()
 void triggerSw3Routine()
 {
     //Serial.println("Triggering SW3 button on");
-    turnOnAllExtRelays();
+    digitalWrite(EXT_RELAY_PINS[D_EXT_RELAYS], HIGH);
+    digitalWrite(EXT_RELAY_PINS[D_EXT_RELAYS+4], HIGH);
 
     digitalWrite(SPI_CS1_PIN, LOW);
     delay(1);
 
     //start sending to SPI lines begining of RELAY request type
 #ifdef SPI_TRANSFER_BUFFER
-    SPI.transfer(on_grpA_relays_cmd, sizeof(on_grpA_relays_cmd));
-    SPI.transfer(on_grpC_relays_cmd, sizeof(on_grpC_relays_cmd));
-#else
-    for (int i = 0; i < sizeof(on_grpA_relays_cmd); i++)
-    {
-        SPI.transfer(on_grpA_relays_cmd[i]);
-        delayMicroseconds(1000); // play with this parameter
-    }
-    
-    for (int i = 0; i < sizeof(on_grpC_relays_cmd); i++)
-    {
-        SPI.transfer(on_grpC_relays_cmd[i]);
-        delayMicroseconds(1000); // play with this parameter
-    }
-#endif
-
-    digitalWrite(SPI_CS1_PIN, HIGH);
-    delay(1);
-}
-
-void triggerSw4Routine()
-{
-    //Serial.println("Triggering SW4 button on");
-    turnOnAllExtRelays();
-
-    digitalWrite(SPI_CS1_PIN, LOW);
-    delay(1);
-
-    //start sending to SPI lines begining of RELAY request type
-#ifdef SPI_TRANSFER_BUFFER
-    SPI.transfer(on_grpB_relays_cmd, sizeof(on_grpB_relays_cmd));
     SPI.transfer(on_grpD_relays_cmd, sizeof(on_grpD_relays_cmd));
 #else
-    for (int i = 0; i < sizeof(on_grpB_relays_cmd); i++)
-    {
-        SPI.transfer(on_grpB_relays_cmd[i]);
-        delayMicroseconds(1000); // play with this parameter
-    }
-    
     for (int i = 0; i < sizeof(on_grpD_relays_cmd); i++)
     {
         SPI.transfer(on_grpD_relays_cmd[i]);
@@ -203,27 +216,102 @@ void triggerSw4Routine()
     delay(1);
 }
 
-void triggerSw5Routine()
+void triggerSw3RoutineOff()
 {
-    //Serial.println("Triggering SW5 button on");
-    turnOnAllExtRelays();
+    //Serial.println("Triggering SW3 button on");
+    digitalWrite(EXT_RELAY_PINS[D_EXT_RELAYS], LOW);
+    digitalWrite(EXT_RELAY_PINS[D_EXT_RELAYS+4], LOW);
 
     digitalWrite(SPI_CS1_PIN, LOW);
     delay(1);
 
     //start sending to SPI lines begining of RELAY request type
 #ifdef SPI_TRANSFER_BUFFER
-    SPI.transfer(on_seq_relays_cmd, sizeof(on_seq_relays_cmd));
+    SPI.transfer(off_grpD_relays_cmd, sizeof(off_grpD_relays_cmd));
 #else
-    for (int i = 0; i < sizeof(on_seq_relays_cmd); i++)
+    for (int i = 0; i < sizeof(off_grpD_relays_cmd); i++)
     {
-        SPI.transfer(on_seq_relays_cmd[i]);
+        SPI.transfer(off_grpD_relays_cmd[i]);
         delayMicroseconds(1000); // play with this parameter
     }
 #endif
 
     digitalWrite(SPI_CS1_PIN, HIGH);
     delay(1);
+}
+
+void triggerSw4Routine()
+{
+    //Serial.println("Triggering SW4 button on");
+    digitalWrite(EXT_RELAY_PINS[A_EXT_RELAYS], HIGH);
+    digitalWrite(EXT_RELAY_PINS[A_EXT_RELAYS+4], HIGH);
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(on_grpA_relays_cmd, sizeof(on_grpA_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(on_grpA_relays_cmd); i++)
+    {
+        SPI.transfer(on_grpA_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
+    }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
+}
+
+void triggerSw4RoutineOff()
+{
+    //Serial.println("Triggering SW4 button on");
+    digitalWrite(EXT_RELAY_PINS[A_EXT_RELAYS], LOW);
+    digitalWrite(EXT_RELAY_PINS[A_EXT_RELAYS+4], LOW);
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(off_grpA_relays_cmd, sizeof(off_grpA_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(off_grpA_relays_cmd); i++)
+    {
+        SPI.transfer(off_grpA_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
+    }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
+}
+
+
+void triggerSw5Routine()
+{
+    //Serial.println("Triggering SW5 button on");
+
+    //trigger group B 1-16, 17-32
+    triggerSw2Routine();
+    delay(1000);
+    triggerSw2RoutineOff();
+
+    //trigger group D 33-48, 49-64
+    triggerSw3Routine();
+    delay(1000);
+    triggerSw3RoutineOff();
+
+    //trigger group A 65-80, 81-96
+    triggerSw4Routine();
+    delay(1000);
+    triggerSw4RoutineOff();
+
+    //trigger group C 97-112, 113-128
+    triggerSw7Routine();
+    delay(1000);
+    triggerSw7RoutineOff();
 }
 
 void triggerSw6Routine()
@@ -234,6 +322,54 @@ void triggerSw6Routine()
     digitalWrite(SLAVE_RESET_PIN, HIGH);
     delay(500); //500ms for slaves to reset
     digitalWrite(SLAVE_RESET_PIN, LOW);
+}
+
+void triggerSw7Routine()
+{
+    //Serial.println("Triggering SW4 button on");
+    digitalWrite(EXT_RELAY_PINS[C_EXT_RELAYS], HIGH);
+    digitalWrite(EXT_RELAY_PINS[C_EXT_RELAYS+4], HIGH);
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(on_grpC_relays_cmd, sizeof(on_grpC_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(on_grpC_relays_cmd); i++)
+    {
+        SPI.transfer(on_grpC_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
+    }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
+}
+
+void triggerSw7RoutineOff()
+{
+    //Serial.println("Triggering SW4 button on");
+    digitalWrite(EXT_RELAY_PINS[C_EXT_RELAYS], LOW);
+    digitalWrite(EXT_RELAY_PINS[C_EXT_RELAYS+4], LOW);
+
+    digitalWrite(SPI_CS1_PIN, LOW);
+    delay(1);
+
+    //start sending to SPI lines begining of RELAY request type
+#ifdef SPI_TRANSFER_BUFFER
+    SPI.transfer(off_grpC_relays_cmd, sizeof(off_grpC_relays_cmd));
+#else
+    for (int i = 0; i < sizeof(off_grpC_relays_cmd); i++)
+    {
+        SPI.transfer(off_grpC_relays_cmd[i]);
+        delayMicroseconds(1000); // play with this parameter
+    }
+#endif
+
+    digitalWrite(SPI_CS1_PIN, HIGH);
+    delay(1);
 }
 
 void resetBuffer()
@@ -250,6 +386,7 @@ void debounceTimerTick()
     Sw4Debouncer.update();
     Sw5Debouncer.update();
     Sw6Debouncer.update();
+    Sw7Debouncer.update();
 }
 
 void checkSwState()
@@ -261,32 +398,44 @@ void checkSwState()
             triggerSw2Routine();
         }
     }
-    else if (Sw3Debouncer.changed())
+
+    if (Sw3Debouncer.changed())
     {
         if (Sw3Debouncer.read() == HIGH)
         {
             triggerSw3Routine();
         }
     }
-    else if (Sw4Debouncer.changed())
+
+    if (Sw4Debouncer.changed())
     {
         if (Sw4Debouncer.read() == HIGH)
         {
             triggerSw4Routine();
         }
     }
-    else if (Sw5Debouncer.changed())
+
+    if (Sw5Debouncer.changed())
     {
         if (Sw5Debouncer.read() == HIGH)
         {
             triggerSw5Routine();
         }
     }
-    else if (Sw6Debouncer.changed())
+
+    if (Sw6Debouncer.changed())
     {
         if (Sw6Debouncer.read() == HIGH)
         {
             triggerSw6Routine();
+        }
+    }
+
+    if (Sw7Debouncer.changed())
+    {
+        if (Sw7Debouncer.read() == HIGH)
+        {
+            triggerSw7Routine();
         }
     }
 }
@@ -307,8 +456,13 @@ void setup() {
 
     for (byte i = 0; i < MAX_EXT_RELAYS; i++)
     {
+        // ext relays
         pinMode(EXT_RELAY_PINS[i], OUTPUT);
         digitalWrite(EXT_RELAY_PINS[i], LOW);
+
+        // ext gate
+        pinMode(EXT_RELAY_PINS[i+4], OUTPUT);
+        digitalWrite(EXT_RELAY_PINS[i+4], LOW);
     }
 
     Sw2Debouncer.attach(SW2_PIN, INPUT_PULLUP);
@@ -316,12 +470,14 @@ void setup() {
     Sw4Debouncer.attach(SW4_PIN, INPUT_PULLUP);
     Sw5Debouncer.attach(SW5_PIN, INPUT_PULLUP);
     Sw6Debouncer.attach(SW6_PIN, INPUT_PULLUP);
+    Sw7Debouncer.attach(SW7_PIN, INPUT_PULLUP);
 
     Sw2Debouncer.interval(DEBOUNCE_MSEC);
     Sw3Debouncer.interval(DEBOUNCE_MSEC);
     Sw4Debouncer.interval(DEBOUNCE_MSEC);
     Sw5Debouncer.interval(DEBOUNCE_MSEC);
     Sw6Debouncer.interval(DEBOUNCE_MSEC);
+    Sw7Debouncer.interval(DEBOUNCE_MSEC);
 
     //begin spi transaction here and not end it, as we're the only SPI user
     SPI.beginTransaction(settings);
@@ -473,7 +629,7 @@ void loop() {
                                         for (int i = 0; i < MAX_EXT_RELAYS; i++)
                                         {
                                             int tmp = cmd_str[delim_idx[i+2]+1];
-                                            if ( (tmp >= 0x61) && (tmp <= 0x64) ) // only supports ext RELAY 'a' to 'd'
+                                            if ( (tmp >= 0x61) && (tmp <= 0x68) ) // only supports ext RELAY 'a' to 'h'
                                             {
                                                 ext_RELAY[total_relays] = tmp - 0x61; //offset to GPIO pin
                                                 total_relays++;
